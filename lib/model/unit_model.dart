@@ -1,36 +1,57 @@
-// lib/model/unit_model.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UnitModel {
-  final String type;
-  final String classSize;
-  final String unitNumber;
-  final String brand;
-  final String desc;
-  final String status;
+  // --- LOGIKA UTAMA PENENTU WARNA ---
+  static String getStatusColor(
+      int planGroup, String condition, Timestamp? lastCheck) {
+    DateTime now = DateTime.now();
+    int day = now.day;
 
-  UnitModel({
-    required this.type,
-    required this.classSize,
-    required this.unitNumber,
-    required this.brand,
-    required this.desc,
-    required this.status,
-  });
+    // 1. PRIORITAS TERTINGGI: Ada temuan ban
+    // Kita cek apakah temuan itu terjadi HARI INI
+    if (condition == 'temuan' &&
+        lastCheck != null &&
+        _isSameDay(lastCheck, now)) {
+      return 'yellow_blink';
+    }
 
-  String get fullCode => "$type$classSize-$unitNumber";
+    // Tgl 31: Hari Free
+    if (day == 31) {
+      return (lastCheck != null && _isSameMonth(lastCheck, now))
+          ? 'green'
+          : 'white';
+    }
 
-  // DATA LIST 11 UNIT BOS
+    // 2. CEK APAKAH SUDAH DICEK HARI INI DAN AMAN?
+    if (lastCheck != null && _isSameDay(lastCheck, now)) {
+      return 'green';
+    }
+
+    // 3. LOGIKA MERAH (Jadwal Hari Ini)
+    bool isJadwalHariIni =
+        (day % 3 == planGroup % 3) || (day % 3 == 0 && planGroup == 3);
+
+    if (isJadwalHariIni) {
+      return 'red';
+    }
+
+    // 4. SISANYA PUTIH
+    return 'white';
+  }
+
+  static bool _isSameDay(Timestamp ts, DateTime now) {
+    DateTime d = ts.toDate();
+    return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
+
+  static bool _isSameMonth(Timestamp ts, DateTime now) {
+    DateTime d = ts.toDate();
+    return d.year == now.year && d.month == now.month;
+  }
+
+  // DATA MASTER 117 UNIT (Tetap di sini)
   static List<Map<String, dynamic>> masterDataList = [
-    {'code': 'DT090-001', 'brand': 'komatsu', 'desc': 'hd 785-7'},
-    {'code': 'DT090-002', 'brand': 'volvo', 'desc': 'fmx 440'},
-    {'code': 'DT090-003', 'brand': 'scania', 'desc': 'p410'},
-    {'code': 'DT090-004', 'brand': 'volvo', 'desc': 'fmx 400'},
-    {'code': 'DT090-005', 'brand': 'komatsu', 'desc': 'hd465'},
-    {'code': 'DT090-006', 'brand': 'scania', 'desc': 'r580'},
-    {'code': 'DT090-007', 'brand': 'volvo', 'desc': 'fmx 440'},
-    {'code': 'DT090-008', 'brand': 'komatsu', 'desc': 'hd785'},
-    {'code': 'DT090-009', 'brand': 'scania', 'desc': 'p410'},
-    {'code': 'DT090-010', 'brand': 'volvo', 'desc': 'fmx 400'},
-    {'code': 'DT090-011', 'brand': 'komatsu', 'desc': 'hd785'},
+    {'code': 'dt090-001', 'brand': 'KOMATSU', 'desc': 'HD 785-7'},
+    // ... data lainnya
   ];
 }

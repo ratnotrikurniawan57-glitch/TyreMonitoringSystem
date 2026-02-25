@@ -1,6 +1,10 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tyre_ms/features/form_inspection_screen.dart';
+import '../model/unit_model.dart'; // Pastikan import model
 
 class TyremanTab extends StatefulWidget {
   const TyremanTab({super.key});
@@ -9,13 +13,65 @@ class TyremanTab extends StatefulWidget {
   State<TyremanTab> createState() => _TyremanTabState();
 }
 
-class _TyremanTabState extends State<TyremanTab> {
+class _TyremanTabState extends State<TyremanTab>
+    with SingleTickerProviderStateMixin {
   String searchQuery = "";
+  late AnimationController _blinkController;
 
-  int get _currentScheduleGroup {
-    int day = DateTime.now().day;
-    int group = day % 3;
-    return group == 0 ? 3 : group;
+  // Ambil NRP dari email login (contoh: 12345@gmail.com jadi 12345)
+  String get _currentNRP =>
+      FirebaseAuth.instance.currentUser?.email?.split('@')[0] ?? "unknown";
+
+  @override
+  void initState() {
+    super.initState();
+    // Setting Animasi Kedip 500ms
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _blinkController.dispose();
+    super.dispose();
+  }
+
+  // --- FUNGSI QUICK CLOSE (DIJALANKAN SAAT KUNING DI-TAP) ---
+  void _showCloseFindingDialog(String unitId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Konfirmasi Perbaikan"),
+        content: Text(
+            "Apakah unit ${unitId.toUpperCase()} sudah selesai diperbaiki dan siap operasi?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("BATAL")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('units')
+                  .doc(unitId)
+                  .update({
+                'condition': 'aman',
+                'last_action_by': _currentNRP,
+                'updated_at': FieldValue.serverTimestamp(),
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                      "✅ Unit $unitId: Perbaikan Selesai oleh $_currentNRP")));
+            },
+            child: const Text("YA, SELESAI",
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -38,7 +94,7 @@ class _TyremanTabState extends State<TyremanTab> {
             ),
           ),
 
-          // Daftar Unit
+          // Daftar Unit (GridView agar muat banyak)
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream:
@@ -48,45 +104,117 @@ class _TyremanTabState extends State<TyremanTab> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                var docs = snapshot.data!.docs.where((doc) {
-                  return doc['unit_code']
-                      .toString()
-                      .toLowerCase()
-                      .contains(searchQuery);
-                }).toList();
+                // 1. MAPPING DATA & PENENTUAN WARNA
+                var docs = snapshot.data!.docs
+                    .map((doc) {
+                      var data = doc.data() as Map<String, dynamic>;
+                      String status = UnitModel.getStatusColor(
+                        data['plan_group'] ?? 1,
+                        data['condition'] ?? 'aman',
+                        data['updated_at'] as Timestamp?,
+                      );
+                      return {'doc': doc, 'status': status, 'id': doc.id};
+                    })
+                    .where(
+                        (item) => item['id'].toString().contains(searchQuery))
+                    .toList();
 
-                return ListView.builder(
+                // 2. LOGIKA SORTING PRIORITAS
+                // Urutan: 1.Kuning Kedip, 2.Merah, 3.Putih, 4.Hijau
+                docs.sort((a, b) {
+                  Map<String, int> priority = {
+                    'yellow_blink': 1,
+                    'red': 2,
+                    'white': 3,
+                    'green': 4
+                  };
+                  int pA = priority[a['status']] ?? 5;
+                  int pB = priority[b['status']] ?? 5;
+                  if (pA != pB) return pA.compareTo(pB);
+                  return a['id'].toString().compareTo(b['id'].toString());
+                });
+
+                return GridView.builder(
+                  padding: const EdgeInsets.all(10),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4, // 4 kotak ke samping
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                  ),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    var doc = docs[index];
-                    var data = doc.data() as Map<String, dynamic>;
+                    var item = docs[index];
+                    String status = item['status'] as String;
+                    String id = item['id'] as String;
 
-                    String code = data['unit_code'] ?? "Unknown";
-                    int? group = data['plan_group'];
-                    String status = data['current_status'] ??
-                        'white'; // Sesuaikan field name
-
-                    return ListTile(
-                      leading: Icon(Icons.local_shipping,
-                          color: _getStatusColor(status)),
-                      title: Text(code.toUpperCase(),
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                          data['vehicle_desc']?.toString().toUpperCase() ??
-                              "-"),
-                      trailing: _buildPlanBadge(group),
+                    return InkWell(
                       onTap: () {
-                        // --- SEKARANG PINTUNYA SUDAH DIBUKA ---
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => FormInspectionScreen(
-                              unitCode: code,
-                              unitId: doc.id, // ID Dokumen Firestore
+                        if (status == 'yellow_blink') {
+                          _showCloseFindingDialog(id);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => FormInspectionScreen(
+                                unitId: id,
+                                unitCode: id,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        }
                       },
+                      child: AnimatedBuilder(
+                        animation: _blinkController,
+                        builder: (context, child) {
+                          // PENENTUAN WARNA BACKGROUND
+                          Color bgColor;
+                          switch (status) {
+                            case 'red':
+                              bgColor = Colors.red;
+                              break;
+                            case 'green':
+                              bgColor = Colors.green;
+                              break;
+                            case 'yellow_blink':
+                              bgColor = Color.lerp(
+                                  Colors.yellow.shade700,
+                                  Colors.orange.shade900,
+                                  _blinkController.value)!;
+                              break;
+                            default:
+                              bgColor = Colors.white;
+                          }
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: bgColor,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300),
+                              boxShadow: status == 'yellow_blink'
+                                  ? [
+                                      BoxShadow(
+                                          color: Colors.orange.withOpacity(0.5),
+                                          blurRadius: 5,
+                                          spreadRadius: 1)
+                                    ]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                id.toUpperCase(),
+                                style: TextStyle(
+                                  color: (status == 'red' || status == 'green')
+                                      ? Colors.white
+                                      : Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     );
                   },
                 );
@@ -96,39 +224,5 @@ class _TyremanTabState extends State<TyremanTab> {
         ],
       ),
     );
-  }
-
-  Widget _buildPlanBadge(int? unitGroup) {
-    if (unitGroup == null) return const SizedBox.shrink();
-    bool isOnPlan = unitGroup == _currentScheduleGroup;
-    if (!isOnPlan) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade700,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Text(
-        "ON PLAN",
-        style: TextStyle(
-            color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Color _getStatusColor(String? status) {
-    switch (status?.toLowerCase()) {
-      case 'red':
-        return Colors.red;
-      case 'yellow':
-        return Colors.orange;
-      case 'green':
-        return Colors.green;
-      case 'white':
-        return Colors.grey.shade400;
-      default:
-        return Colors.grey.shade300;
-    }
   }
 }

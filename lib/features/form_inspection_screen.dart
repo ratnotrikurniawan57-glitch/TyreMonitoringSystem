@@ -15,15 +15,13 @@ class FormInspectionScreen extends StatefulWidget {
 class _FormInspectionScreenState extends State<FormInspectionScreen> {
   // --- VARIABEL KONTROL ---
   String? selectedLocation;
-  bool isUrgent = false;
+  bool isUrgent = false; // Switch Kuning
   final TextEditingController _descController = TextEditingController();
   bool isSubmitting = false;
 
   // --- VARIABEL MULTI-TYREMAN ---
-  List<Map<String, dynamic>> _allUsers =
-      []; // Master data tyreman dari Firestore
-  final List<Map<String, dynamic>> _selectedTeam =
-      []; // Tim yang dipilih untuk tugas ini
+  List<Map<String, dynamic>> _allUsers = [];
+  final List<Map<String, dynamic>> _selectedTeam = [];
   String _searchQuery = "";
 
   final List<String> locations = ['Pitstop', 'Workshop', 'Moving', 'Refueling'];
@@ -31,10 +29,10 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchTyremanList(); // Ambil daftar nama tyreman saat form dibuka
+    _fetchTyremanList();
   }
 
-  // AMBIL DAFTAR TYREMAN DARI DATABASE
+  // AMBIL DAFTAR TYREMAN (Fokus ke Role Tyreman)
   Future<void> _fetchTyremanList() async {
     try {
       var snapshot = await FirebaseFirestore.instance
@@ -70,44 +68,46 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     setState(() => isSubmitting = true);
 
     try {
-      // 1. Cek Akurasi (Target 100%)
+      // 1. Ambil Data Unit untuk cek Akurasi
       var unitDoc = await FirebaseFirestore.instance
           .collection('units')
           .doc(widget.unitId)
           .get();
+
       int planGroup = unitDoc.data()?['plan_group'] ?? 0;
       int day = DateTime.now().day;
-      int currentTargetGroup = (day % 3 == 0) ? 3 : day % 3;
-      bool isAccurate = (planGroup == currentTargetGroup);
 
-      // 2. Ambil semua NRP dari tim yang dipilih (Array)
+      // Hitung apakah hari ini memang jadwalnya dia (Target 100% KPI)
+      bool isAccurate =
+          (day % 3 == planGroup % 3) || (day % 3 == 0 && planGroup == 3);
+
+      // 2. Mapping NRP Tim
       List<String> teamNrps =
           _selectedTeam.map((t) => t['nrp'].toString()).toList();
 
-      // 3. Simpan ke koleksi Inspections (1 Data untuk semua)
+      // 3. Simpan ke Riwayat Inspeksi (History)
       await FirebaseFirestore.instance.collection('inspections').add({
         'unit_code': widget.unitCode.toLowerCase(),
         'timestamp': FieldValue.serverTimestamp(),
         'lokasi': selectedLocation!.toLowerCase(),
-        'status': isUrgent ? 'yellow' : 'green',
+        'condition': isUrgent ? 'temuan' : 'aman', // Sesuai Logika Dashboard
         'finding_desc': _descController.text.trim(),
-        'team_nrp': teamNrps, // DISIMPAN SEBAGAI ARRAY
+        'team_nrp': teamNrps,
         'is_accurate': isAccurate,
       });
 
-      // 4. Update Status di Master Unit
+      // 4. Update Status di Dokumen Unit (Real-time Dashboard)
       await FirebaseFirestore.instance
           .collection('units')
           .doc(widget.unitId)
           .update({
-        'current_status': isUrgent ? 'yellow' : 'green',
-        'last_check': FieldValue.serverTimestamp(),
-        'last_team': teamNrps,
+        'condition': isUrgent ? 'temuan' : 'aman',
+        'updated_at': FieldValue.serverTimestamp(), // Penentu warna Hijau
+        'last_inspector_team': teamNrps,
       });
 
       if (!mounted) return;
-      _showSnackBar(
-          "✅ Berhasil disimpan untuk ${teamNrps.length} orang", Colors.green);
+      _showSnackBar("✅ Laporan Berhasil Terkirim!", Colors.green);
       Navigator.pop(context);
     } catch (e) {
       if (mounted) setState(() => isSubmitting = false);
@@ -132,40 +132,48 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // INFO UNIT
+            // CARD INFO UNIT
             Card(
+              elevation: 0,
               color: Colors.blueGrey.shade50,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
               child: ListTile(
-                leading: const Icon(Icons.local_shipping),
-                title: Text("Unit: ${widget.unitCode.toUpperCase()}",
+                leading:
+                    const Icon(Icons.local_shipping, color: Colors.blueGrey),
+                title: Text("UNIT: ${widget.unitCode.toUpperCase()}",
                     style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle:
+                    const Text("Pastikan unit dalam posisi aman sebelum dicek"),
               ),
             ),
             const SizedBox(height: 20),
 
-            // INPUT TIM (PENCARIAN)
-            const Text("TIM PENGECEKAN",
+            // INPUT TIM (MULTI-USER)
+            const Text("PILIH TIM TYREMAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             TextField(
               decoration: InputDecoration(
-                hintText: "Ketik Nama atau NRP tim...",
-                prefixIcon: const Icon(Icons.person_add),
+                hintText: "Cari Nama/NRP...",
+                prefixIcon: const Icon(Icons.person_search),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                filled: true,
+                fillColor: Colors.grey.shade100,
               ),
               onChanged: (val) =>
                   setState(() => _searchQuery = val.toLowerCase()),
             ),
 
-            // HASIL PENCARIAN USER
+            // HASIL PENCARIAN
             if (_searchQuery.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 5),
                 decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(10)),
-                constraints: const BoxConstraints(maxHeight: 150),
+                constraints: const BoxConstraints(maxHeight: 200),
                 child: ListView(
                   shrinkWrap: true,
                   children: _allUsers
@@ -176,7 +184,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                               .toLowerCase()
                               .contains(_searchQuery))
                       .map((u) => ListTile(
-                            title: Text(u['nama']),
+                            title: Text(u['nama'] ?? ""),
                             subtitle: Text("NRP: ${u['nrp']}"),
                             onTap: () {
                               setState(() {
@@ -184,7 +192,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                                     .any((item) => item['nrp'] == u['nrp'])) {
                                   _selectedTeam.add(u);
                                 }
-                                _searchQuery = ""; // Reset search
+                                _searchQuery = "";
                               });
                             },
                           ))
@@ -192,24 +200,25 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                 ),
               ),
 
-            // DAFTAR TIM TERPILIH (CHIPS)
+            // CHIPS TIM TERPILIH
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               children: _selectedTeam
-                  .map((t) => Chip(
-                        backgroundColor: Colors.blue.shade100,
+                  .map((t) => InputChip(
                         label: Text(t['nama']),
                         onDeleted: () =>
                             setState(() => _selectedTeam.remove(t)),
+                        deleteIconColor: Colors.red,
                       ))
                   .toList(),
             ),
 
             const Divider(height: 40),
 
-            // LOKASI
-            const Text("LOKASI", style: TextStyle(fontWeight: FontWeight.bold)),
+            // LOKASI & TEMUAN
+            const Text("LOKASI UNIT",
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               decoration: InputDecoration(
@@ -223,42 +232,58 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
             ),
 
             const SizedBox(height: 20),
-
-            // CATATAN TEMUAN
-            const Text("CATATAN / TEMUAN",
+            const Text("CATATAN TAMBAHAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             TextField(
               controller: _descController,
-              maxLines: 2,
+              maxLines: 3,
               decoration: InputDecoration(
+                  hintText: "Contoh: Ban kiri pecah, perlu ganti segera...",
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10))),
             ),
 
-            // SWITCH KUNING (URGENT)
-            SwitchListTile(
-              title: const Text("ADA TEMUAN (KUNING)",
-                  style: TextStyle(
-                      color: Colors.orange, fontWeight: FontWeight.bold)),
-              value: isUrgent,
-              onChanged: (val) => setState(() => isUrgent = val),
+            const SizedBox(height: 10),
+
+            // LOGIKA KUNING KEDIP (URGENT)
+            Container(
+              decoration: BoxDecoration(
+                color: isUrgent ? Colors.orange.shade50 : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: SwitchListTile(
+                title: const Text("ADA TEMUAN?",
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle:
+                    const Text("Aktifkan jika unit butuh perbaikan segera"),
+                secondary: Icon(Icons.warning_amber_rounded,
+                    color: isUrgent ? Colors.orange : Colors.grey),
+                value: isUrgent,
+                activeColor: Colors.orange,
+                onChanged: (val) => setState(() => isUrgent = val),
+              ),
             ),
 
             const SizedBox(height: 30),
 
-            // TOMBOL SIMPAN
+            // BUTTON SUBMIT
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 55,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange.shade800,
-                    foregroundColor: Colors.white),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12))),
                 onPressed: isSubmitting ? null : _submitInspection,
                 child: isSubmitting
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("SIMPAN LAPORAN"),
+                    : const Text("KIRIM LAPORAN",
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
               ),
             ),
           ],

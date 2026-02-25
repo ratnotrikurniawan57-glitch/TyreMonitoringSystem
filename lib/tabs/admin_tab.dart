@@ -12,9 +12,9 @@ class AdminTab extends StatefulWidget {
 }
 
 class _AdminTabState extends State<AdminTab> {
-  // PERUBAHAN: Default langsung ke P1 agar tidak berat & tidak muter
   String _filterPeriode = "1";
 
+  // FUNGSI UPDATE GRUP UNIT
   void _quickEditPlan(String docId, int currentPlan) {
     showDialog(
       context: context,
@@ -52,23 +52,12 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  Future<void> _addMasterData(String collectionName, String newValue) async {
-    if (newValue.isEmpty) return;
-    String cleanValue = newValue.trim().toUpperCase();
-    await FirebaseFirestore.instance
-        .collection('settings')
-        .doc(collectionName)
-        .set({
-      'list': FieldValue.arrayUnion([cleanValue])
-    }, SetOptions(merge: true));
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // MENU UTAMA ATAS (Fitur Tetap Lengkap)
+          // MENU UTAMA ATAS
           Padding(
             padding: const EdgeInsets.all(15.0),
             child: Row(
@@ -90,7 +79,7 @@ class _AdminTabState extends State<AdminTab> {
           ),
           const Divider(thickness: 2),
 
-          // PERUBAHAN: Tombol P1, P2, P3 sebagai pengganti Search (Anti-Muter)
+          // FILTER PERIODE P1, P2, P3
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15.0),
             child: Row(
@@ -108,23 +97,23 @@ class _AdminTabState extends State<AdminTab> {
           // GRID DAFTAR UNIT
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              // STREAM POLOS: Biar gak butuh Index (Anti-Muter)
               stream:
                   FirebaseFirestore.instance.collection('units').snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData)
+                if (!snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
 
-                // Filter & Sort dilakukan di memori HP (Super Cepat)
+                // Filter berdasarkan tombol P1/P2/P3
                 var docs = snap.data!.docs.where((d) {
                   return d['plan_group'].toString() == _filterPeriode;
                 }).toList();
 
-                // Urutkan berdasarkan Kode Unit
                 docs.sort((a, b) => (a.id).compareTo(b.id));
 
-                if (docs.isEmpty)
+                if (docs.isEmpty) {
                   return const Center(child: Text("Data tidak ditemukan"));
+                }
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(15),
@@ -181,7 +170,7 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // Widget Tombol Filter Baru
+  // WIDGET TOMBOL FILTER
   Widget _buildFilterButton(String label, String value) {
     bool isActive = _filterPeriode == value;
     return Expanded(
@@ -189,7 +178,6 @@ class _AdminTabState extends State<AdminTab> {
         style: ElevatedButton.styleFrom(
           backgroundColor: isActive ? Colors.blue : Colors.grey.shade200,
           foregroundColor: isActive ? Colors.white : Colors.black,
-          elevation: isActive ? 4 : 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         onPressed: () => setState(() => _filterPeriode = value),
@@ -198,7 +186,34 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- FORM TAMBAH UNIT (TETAP ADA) ---
+  // FUNGSI IMPORT MASSAL (VERSI TERBARU)
+  Future<void> _importMassal() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => const Center(child: CircularProgressIndicator()),
+    );
+
+    for (var i = 0; i < UnitModel.masterDataList.length; i++) {
+      var item = UnitModel.masterDataList[i];
+      await FirebaseFirestore.instance
+          .collection('units')
+          .doc(item['code'].toString().toLowerCase())
+          .set({
+        'unit_code': item['code'].toString().toLowerCase(),
+        'brand': item['brand'].toString().toUpperCase(),
+        'vehicle_desc': item['desc'].toString().toUpperCase(),
+        'plan_group': (i % 3) + 1, // Otomatis bagi P1, P2, P3
+        'condition': 'aman', // Default awal
+        'updated_at': null, // Agar terbaca belum dicek
+      });
+    }
+    Navigator.pop(context); // Tutup Loading
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("✅ Sukses Import 117 Unit!")));
+  }
+
+  // FUNGSI TAMBAH UNIT MANUAL
   void _showAddUnitDialog(BuildContext context) {
     final unitController = TextEditingController();
     String? selectedBrand;
@@ -209,44 +224,33 @@ class _AdminTabState extends State<AdminTab> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: const Text("TAMBAH UNIT BARU"),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                      controller: unitController,
-                      decoration: const InputDecoration(
-                          labelText: "Kode Unit (Contoh: DT01)")),
-                  const SizedBox(height: 10),
-                  _buildDynamicDropdown("brands", "Pilih Brand", selectedBrand,
-                      (val) => setDialogState(() => selectedBrand = val)),
-                  const SizedBox(height: 10),
-                  _buildDynamicDropdown(
-                      "descriptions",
-                      "Pilih Kelas/Desc",
-                      selectedDesc,
-                      (val) => setDialogState(() => selectedDesc = val)),
-                  const SizedBox(height: 20),
-                  const Text("Plan Group:",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    children: [1, 2, 3]
-                        .map((n) => ChoiceChip(
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: unitController,
+                    decoration: const InputDecoration(labelText: "Kode Unit")),
+                const SizedBox(height: 10),
+                _buildDynamicDropdown("brands", "Brand", selectedBrand,
+                    (val) => setDialogState(() => selectedBrand = val)),
+                const SizedBox(height: 10),
+                _buildDynamicDropdown("descriptions", "Desc", selectedDesc,
+                    (val) => setDialogState(() => selectedDesc = val)),
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 10,
+                  children: [1, 2, 3]
+                      .map((n) => ChoiceChip(
                             label: Text("Grup $n"),
                             selected: selectedPlan == n,
                             onSelected: (s) =>
-                                setDialogState(() => selectedPlan = n)))
-                        .toList(),
-                  ),
-                ],
-              ),
+                                setDialogState(() => selectedPlan = n),
+                          ))
+                      .toList(),
+                ),
+              ],
             ),
           ),
           actions: [
@@ -255,19 +259,17 @@ class _AdminTabState extends State<AdminTab> {
                 child: const Text("BATAL")),
             ElevatedButton(
               onPressed: () async {
-                if (unitController.text.isNotEmpty &&
-                    selectedBrand != null &&
-                    selectedDesc != null) {
+                if (unitController.text.isNotEmpty) {
                   await FirebaseFirestore.instance
                       .collection('units')
                       .doc(unitController.text.trim().toLowerCase())
                       .set({
                     'unit_code': unitController.text.trim().toLowerCase(),
-                    'brand': selectedBrand,
-                    'vehicle_desc': selectedDesc,
+                    'brand': selectedBrand ?? "UNKNOWN",
+                    'vehicle_desc': selectedDesc ?? "UNKNOWN",
                     'plan_group': selectedPlan,
-                    'current_status': 'white',
-                    'updated_at': FieldValue.serverTimestamp(),
+                    'condition': 'aman',
+                    'updated_at': null,
                   });
                   Navigator.pop(context);
                 }
@@ -280,6 +282,7 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
+  // DROPDOWN DINAMIS (Brand & Desc)
   Widget _buildDynamicDropdown(
       String coll, String label, String? current, Function(String?) onChanged) {
     return StreamBuilder<DocumentSnapshot>(
@@ -322,14 +325,20 @@ class _AdminTabState extends State<AdminTab> {
         title: Text("Tambah ${coll.toUpperCase()}"),
         content: TextField(
             controller: controller,
-            decoration: const InputDecoration(hintText: "Masukkan nama...")),
+            decoration: const InputDecoration(hintText: "Nama...")),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text("BATAL")),
           ElevatedButton(
-              onPressed: () {
-                _addMasterData(coll, controller.text);
+              onPressed: () async {
+                await FirebaseFirestore.instance
+                    .collection('settings')
+                    .doc(coll)
+                    .set({
+                  'list': FieldValue.arrayUnion(
+                      [controller.text.trim().toUpperCase()])
+                }, SetOptions(merge: true));
                 Navigator.pop(context);
               },
               child: const Text("SIMPAN")),
@@ -359,23 +368,5 @@ class _AdminTabState extends State<AdminTab> {
         ),
       ),
     );
-  }
-
-  Future<void> _importMassal() async {
-    for (var i = 0; i < UnitModel.masterDataList.length; i++) {
-      var item = UnitModel.masterDataList[i];
-      await FirebaseFirestore.instance
-          .collection('units')
-          .doc(item['code'].toString().toLowerCase())
-          .set({
-        'unit_code': item['code'].toString().toLowerCase(),
-        'brand': item['brand'].toString().toUpperCase(),
-        'vehicle_desc': item['desc'].toString().toUpperCase(),
-        'plan_group': (i % 3) + 1,
-        'current_status': 'white',
-      });
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Sukses Import 117 Unit!")));
   }
 }
