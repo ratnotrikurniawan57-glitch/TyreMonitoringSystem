@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:tyre_ms/features/dashboard_screen.dart';
+import '../features/dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,7 +17,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isObscure = true;
 
   void prosesLogin() async {
-    // 2. Sesuai aturan: NRP diubah ke lowercase sebelum dicek ke Firebase
     String nrp = nrpController.text.trim().toLowerCase();
     String password = passController.text.trim();
 
@@ -31,19 +30,17 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Mencari dokumen berdasarkan ID NRP (String)
       var userDoc =
           await FirebaseFirestore.instance.collection('users').doc(nrp).get();
 
       if (userDoc.exists) {
         String dbPassword = userDoc.data()?['password'] ?? '';
-        // 3. Sesuai instruksi: Default role adalah tyreman (bukan mekanik)
         String userRole = userDoc.data()?['role'] ?? 'tyreman';
 
         if (dbPassword == password) {
+          // GUARD: Cek apakah widget masih nempel di layar sebelum pindah halaman
           if (!mounted) return;
 
-          // LOGIN BERHASIL: Navigator sekarang mengenali DashboardScreen dari import di atas
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -60,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         throw "NRP $nrp tidak terdaftar!";
       }
     } catch (e) {
+      // GUARD: Cek apakah widget masih nempel sebelum munculin snackbar
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -82,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo TMS
+              // BALIKIN LOGO BAN ORANYE LO
               Image.asset(
                 'assets/images/logo_tms.png',
                 height: 180,
@@ -103,14 +101,12 @@ class _LoginScreenState extends State<LoginScreen> {
               // Input NRP
               TextField(
                 controller: nrpController,
-                // Diubah ke text karena ID Firebase kita lowercase string
                 keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   hintText: "NRP (Contoh: 01121174)",
                   prefixIcon: const Icon(Icons.person),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
               const SizedBox(height: 15),
@@ -124,23 +120,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _isObscure ? Icons.visibility_off : Icons.visibility,
-                      color: const Color(0xFFFF8C00),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isObscure = !_isObscure;
-                      });
-                    },
+                        _isObscure ? Icons.visibility_off : Icons.visibility,
+                        color: const Color(0xFFFF8C00)),
+                    onPressed: () => setState(() => _isObscure = !_isObscure),
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                      borderRadius: BorderRadius.circular(10)),
                 ),
               ),
               const SizedBox(height: 10),
 
-              // Lupa Password
               const Align(
                 alignment: Alignment.centerRight,
                 child: Text(
@@ -153,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 25),
 
-              // Tombol Login
+              // TOMBOL LOGIN ORANYE
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -162,10 +151,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF8C00),
                     foregroundColor: Colors.white,
-                    elevation: 2,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                        borderRadius: BorderRadius.circular(10)),
                   ),
                   child: _isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
@@ -176,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 50),
 
-              // Slogan Bawah
+              // SLOGAN BAWAH
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -186,21 +173,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Column(
                   children: [
-                    Text(
-                      "Utamakan Keselamatan, Tingkatkan Performamu,",
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500),
-                    ),
+                    Text("Utamakan Keselamatan, Tingkatkan Performamu,",
+                        style:
+                            TextStyle(fontSize: 10, color: Colors.grey[700])),
                     const SizedBox(height: 4),
-                    Text(
-                      "Jaga Unit Tetap Beroperasi",
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500),
-                    ),
+                    Text("Jaga Unit Tetap Beroperasi",
+                        style:
+                            TextStyle(fontSize: 10, color: Colors.grey[700])),
                   ],
                 ),
               ),

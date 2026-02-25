@@ -32,7 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _ambilNamaUser(); // Ambil nama dari Firestore saat layar dimuat
   }
 
-  // Fungsi untuk menarik nama asli dari database users
+  // --- FUNGSI AMBIL NAMA ---
   void _ambilNamaUser() async {
     try {
       var doc = await FirebaseFirestore.instance
@@ -42,13 +42,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (doc.exists) {
         setState(() {
-          // Mengambil field 'nama' (pastikan di Firestore namanya 'nama')
           _namaUser = doc.data()?['nama'] ?? widget.nrpAktif;
         });
       }
     } catch (e) {
       debugPrint("Error ambil nama: $e");
     }
+  }
+
+  // --- FUNGSI GANTI PASSWORD (MESIN YANG TADI HILANG) ---
+  void _showChangePasswordDialog() {
+    final TextEditingController newPassController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Ganti Password"),
+        content: TextField(
+          controller: newPassController,
+          obscureText: true,
+          decoration: const InputDecoration(
+            hintText: "Masukkan password baru",
+            labelText: "Password Baru",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (newPassController.text.isNotEmpty) {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(widget.nrpAktif)
+                    .update({'password': newPassController.text});
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text("Password berhasil diperbarui!")),
+                  );
+                }
+              }
+            },
+            child: const Text("Simpan"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -63,19 +106,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // Judul sekarang dinamis menggunakan Nama User
         title: Text(
           "TMS | $_namaUser",
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: false,
         actions: [
+          // 1. IKON GANTI PASSWORD
+          IconButton(
+            icon: const Icon(Icons.lock_reset),
+            tooltip: "Ganti Password",
+            onPressed: _showChangePasswordDialog, // Sekarang pasti kenal!
+          ),
+          // 2. IKON LOGOUT
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-            ),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+              );
+            },
           )
         ],
       ),
