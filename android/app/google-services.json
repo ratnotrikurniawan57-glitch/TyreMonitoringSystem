@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "611386293758",
+    "project_id": "tyremonitoringsystem-8efde",
+    "storage_bucket": "tyremonitoringsystem-8efde.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611386293758:android:4b34026b6e2eed569b54af",
+        "android_client_info": {
+          "package_name": "com.example.tyre_ms"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKC9NoD-XCkGFXpej4xBT0oiDXLXShS3o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
