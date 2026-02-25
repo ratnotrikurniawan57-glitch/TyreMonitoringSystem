@@ -12,9 +12,9 @@ class AdminTab extends StatefulWidget {
 }
 
 class _AdminTabState extends State<AdminTab> {
-  String _filterPeriode = "";
+  // PERUBAHAN: Default langsung ke P1 agar tidak berat & tidak muter
+  String _filterPeriode = "1";
 
-  // --- FUNGSI QUICK EDIT PLAN GROUP (INT) ---
   void _quickEditPlan(String docId, int currentPlan) {
     showDialog(
       context: context,
@@ -39,9 +39,7 @@ class _AdminTabState extends State<AdminTab> {
                     await FirebaseFirestore.instance
                         .collection('units')
                         .doc(docId)
-                        .update({
-                      'plan_group': num,
-                    });
+                        .update({'plan_group': num});
                     Navigator.pop(context);
                   },
                   child: Text("$num"),
@@ -54,7 +52,6 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- FUNGSI TAMBAH MASTER DATA ---
   Future<void> _addMasterData(String collectionName, String newValue) async {
     if (newValue.isEmpty) return;
     String cleanValue = newValue.trim().toUpperCase();
@@ -71,7 +68,7 @@ class _AdminTabState extends State<AdminTab> {
     return Scaffold(
       body: Column(
         children: [
-          // MENU UTAMA ATAS
+          // MENU UTAMA ATAS (Fitur Tetap Lengkap)
           Padding(
             padding: const EdgeInsets.all(15.0),
             child: Row(
@@ -93,24 +90,17 @@ class _AdminTabState extends State<AdminTab> {
           ),
           const Divider(thickness: 2),
 
-          // SEARCH PERIODE & SORTING
+          // PERUBAHAN: Tombol P1, P2, P3 sebagai pengganti Search (Anti-Muter)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15.0),
-            child: TextField(
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                hintText: "Cari Periode (1, 2, atau 3)...",
-                prefixIcon: const Icon(Icons.filter_alt),
-                suffixIcon: _filterPeriode.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(() => _filterPeriode = ""))
-                    : null,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              ),
-              onChanged: (val) => setState(() => _filterPeriode = val),
+            child: Row(
+              children: [
+                _buildFilterButton("P1", "1"),
+                const SizedBox(width: 10),
+                _buildFilterButton("P2", "2"),
+                const SizedBox(width: 10),
+                _buildFilterButton("P3", "3"),
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -118,24 +108,23 @@ class _AdminTabState extends State<AdminTab> {
           // GRID DAFTAR UNIT
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('units')
-                  .orderBy('plan_group', descending: false)
-                  .orderBy('unit_code', descending: false)
-                  .snapshots(),
+              // STREAM POLOS: Biar gak butuh Index (Anti-Muter)
+              stream:
+                  FirebaseFirestore.instance.collection('units').snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData) {
+                if (!snap.hasData)
                   return const Center(child: CircularProgressIndicator());
-                }
 
+                // Filter & Sort dilakukan di memori HP (Super Cepat)
                 var docs = snap.data!.docs.where((d) {
-                  if (_filterPeriode.isEmpty) return true;
                   return d['plan_group'].toString() == _filterPeriode;
                 }).toList();
 
-                if (docs.isEmpty) {
+                // Urutkan berdasarkan Kode Unit
+                docs.sort((a, b) => (a.id).compareTo(b.id));
+
+                if (docs.isEmpty)
                   return const Center(child: Text("Data tidak ditemukan"));
-                }
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(15),
@@ -192,7 +181,24 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- FORM TAMBAH UNIT (ANTI-NUMPUK) ---
+  // Widget Tombol Filter Baru
+  Widget _buildFilterButton(String label, String value) {
+    bool isActive = _filterPeriode == value;
+    return Expanded(
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isActive ? Colors.blue : Colors.grey.shade200,
+          foregroundColor: isActive ? Colors.white : Colors.black,
+          elevation: isActive ? 4 : 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: () => setState(() => _filterPeriode = value),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  // --- FORM TAMBAH UNIT (TETAP ADA) ---
   void _showAddUnitDialog(BuildContext context) {
     final unitController = TextEditingController();
     String? selectedBrand;
@@ -233,11 +239,10 @@ class _AdminTabState extends State<AdminTab> {
                     spacing: 10,
                     children: [1, 2, 3]
                         .map((n) => ChoiceChip(
-                              label: Text("Grup $n"),
-                              selected: selectedPlan == n,
-                              onSelected: (s) =>
-                                  setDialogState(() => selectedPlan = n),
-                            ))
+                            label: Text("Grup $n"),
+                            selected: selectedPlan == n,
+                            onSelected: (s) =>
+                                setDialogState(() => selectedPlan = n)))
                         .toList(),
                   ),
                 ],
@@ -275,7 +280,6 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- WIDGET DROPDOWN DINAMIS ---
   Widget _buildDynamicDropdown(
       String coll, String label, String? current, Function(String?) onChanged) {
     return StreamBuilder<DocumentSnapshot>(
@@ -310,7 +314,6 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- DIALOG TAMBAH PILIHAN (BRAND/DESC) ---
   void _showAddMasterDialog(String coll) {
     final controller = TextEditingController();
     showDialog(
@@ -335,7 +338,6 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- WIDGET TOMBOL MENU ---
   Widget _menuBtn(String t, IconData i, Color c, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
@@ -359,7 +361,6 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // --- FUNGSI IMPORT MASSAL ---
   Future<void> _importMassal() async {
     for (var i = 0; i < UnitModel.masterDataList.length; i++) {
       var item = UnitModel.masterDataList[i];

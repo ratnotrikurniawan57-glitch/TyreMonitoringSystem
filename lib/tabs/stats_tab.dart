@@ -8,75 +8,144 @@ class StatsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     DateTime now = DateTime.now();
-    DateTime startOfMonth = DateTime(now.year, now.month, 1);
-    DateTime endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    // Filter manual di aplikasi untuk bulan ini
+    String currentMonthYear = DateFormat('MM-yyyy').format(now);
 
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- BAGIAN 1: RINGKASAN STATUS UNIT ---
             const Padding(
-              padding: EdgeInsets.all(16.0),
+              padding: EdgeInsets.fromLTRB(16, 20, 16, 10),
+              child: Text("RINGKASAN STATUS UNIT",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            _buildOverallStatus(),
+
+            // --- BAGIAN 2: PERFORMA PER KELAS ---
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 20, 16, 10),
               child: Text("PERFORMA KELAS UNIT",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-            _buildUnitStats(startOfMonth, endOfMonth),
-            const Divider(thickness: 2),
+            _buildUnitStats(currentMonthYear),
+
+            const Divider(thickness: 1, height: 40),
+
+            // --- BAGIAN 3: LEADERBOARD TYREMAN ---
             Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(
-                  "TOP TYREMAN - ${DateFormat('MMMM yyyy').format(now).toUpperCase()}",
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("TOP TYREMAN",
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(DateFormat('MMMM yyyy').format(now).toUpperCase(),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
             ),
-            _buildTyremanLeaderboard(startOfMonth, endOfMonth),
+            const SizedBox(height: 10),
+            _buildTyremanLeaderboard(currentMonthYear),
+            const SizedBox(height: 30),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildUnitStats(DateTime start, DateTime end) {
+  Widget _buildOverallStatus() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('units').snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const LinearProgressIndicator();
+
+        int green =
+            snap.data!.docs.where((d) => d['current_status'] == 'green').length;
+        int yellow = snap.data!.docs
+            .where((d) => d['current_status'] == 'yellow')
+            .length;
+        int white =
+            snap.data!.docs.where((d) => d['current_status'] == 'white').length;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              _statusMiniBox("AMAN", green, Colors.green),
+              _statusMiniBox("PANTAU", yellow, Colors.orange),
+              _statusMiniBox("BELUM", white, Colors.grey),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _statusMiniBox(String label, int count, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.5)),
+        ),
+        child: Column(
+          children: [
+            Text("$count",
+                style: TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnitStats(String monthYear) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('units').snapshots(),
       builder: (context, unitSnapshot) {
-        if (!unitSnapshot.hasData) {
+        if (!unitSnapshot.hasData)
           return const Center(child: CircularProgressIndicator());
-        }
 
         return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('inspections')
-              .where('timestamp', isGreaterThanOrEqualTo: start)
-              .where('timestamp', isLessThanOrEqualTo: end)
-              .snapshots(),
+          // STREAM AMAN: Tanpa filter where yang bikin muter
+          stream:
+              FirebaseFirestore.instance.collection('inspections').snapshots(),
           builder: (context, insSnapshot) {
             if (!insSnapshot.hasData) return const SizedBox();
 
-            Map<String, List<String>> classes = {};
+            // Filter manual berdasarkan bulan ini dari timestamp
+            var filteredIns = insSnapshot.data!.docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              if (data['timestamp'] == null) return false;
+              DateTime date = (data['timestamp'] as Timestamp).toDate();
+              return DateFormat('MM-yyyy').format(date) == monthYear;
+            }).toList();
 
-            // PERBAIKAN: Gunakan Map data() agar lebih aman saat cek field
+            Map<String, List<String>> classes = {};
             for (var doc in unitSnapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              // Jika field vehicle_desc tidak ada, pakai 'LAINNYA'
-              String desc = data.containsKey('vehicle_desc')
-                  ? data['vehicle_desc']
-                  : 'LAINNYA';
+              String desc = data['vehicle_desc'] ?? 'LAINNYA';
               String unitId = doc.id;
-
               if (!classes.containsKey(desc)) classes[desc] = [];
               classes[desc]!.add(unitId);
             }
 
-            List<String> checkedUnits = insSnapshot.data!.docs
-                .map((d) {
-                  final data = d.data() as Map<String, dynamic>;
-                  return data.containsKey('unit_code')
-                      ? data['unit_code'].toString()
-                      : '';
-                })
-                .where((id) => id.isNotEmpty)
+            List<String> checkedUnits = filteredIns
+                .map((d) =>
+                    (d.data() as Map<String, dynamic>)['unit_code']
+                        ?.toString() ??
+                    '')
                 .toList();
 
             return ListView.builder(
@@ -85,32 +154,37 @@ class StatsTab extends StatelessWidget {
               itemCount: classes.keys.length,
               itemBuilder: (context, index) {
                 String className = classes.keys.elementAt(index);
-                List<String> allUnitsInClass = classes[className]!;
-
-                int countChecked = allUnitsInClass
-                    .where((u) => checkedUnits.contains(u))
-                    .length;
-                double qtyPercent = allUnitsInClass.isEmpty
+                List<String> allUnits = classes[className]!;
+                int countChecked =
+                    allUnits.where((u) => checkedUnits.contains(u)).length;
+                double qtyPercent = allUnits.isEmpty
                     ? 0
-                    : (countChecked / allUnitsInClass.length) * 100;
+                    : (countChecked / allUnits.length) * 100;
 
                 return Card(
                   margin:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      side: BorderSide(color: Colors.grey.shade200),
+                      borderRadius: BorderRadius.circular(10)),
                   child: ListTile(
                     title: Text(className.toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 5),
                         Text(
-                            "Qty: $countChecked/${allUnitsInClass.length} Unit (${qtyPercent.toStringAsFixed(0)}%)"),
+                            "Qty: $countChecked/${allUnits.length} Unit (${qtyPercent.toStringAsFixed(0)}%)",
+                            style: const TextStyle(fontSize: 11)),
                         const SizedBox(height: 4),
                         LinearProgressIndicator(
                           value: qtyPercent / 100,
-                          backgroundColor: Colors.grey.shade300,
+                          backgroundColor: Colors.grey.shade200,
                           color: qtyPercent == 100 ? Colors.green : Colors.blue,
+                          minHeight: 6,
                         ),
                       ],
                     ),
@@ -124,19 +198,23 @@ class StatsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildTyremanLeaderboard(DateTime start, DateTime end) {
+  Widget _buildTyremanLeaderboard(String monthYear) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('inspections')
-          .where('timestamp', isGreaterThanOrEqualTo: start)
-          .where('timestamp', isLessThanOrEqualTo: end)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('inspections').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox();
 
         Map<String, int> tyremanPoints = {};
 
-        for (var doc in snapshot.data!.docs) {
+        // Filter manual bulan ini
+        var filteredDocs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          if (data['timestamp'] == null) return false;
+          DateTime date = (data['timestamp'] as Timestamp).toDate();
+          return DateFormat('MM-yyyy').format(date) == monthYear;
+        });
+
+        for (var doc in filteredDocs) {
           final data = doc.data() as Map<String, dynamic>;
           List<dynamic> nrps = data['team_nrp'] ?? [];
           for (var nrp in nrps) {
@@ -148,18 +226,34 @@ class StatsTab extends StatelessWidget {
         var sortedList = tyremanPoints.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
 
+        if (sortedList.isEmpty)
+          return const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text("Belum ada data inspeksi bulan ini",
+                      style: TextStyle(color: Colors.grey))));
+
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: sortedList.length,
           itemBuilder: (context, index) {
             final entry = sortedList[index];
-            return ListTile(
-              leading: CircleAvatar(child: Text("${index + 1}")),
-              title: Text(entry.key),
-              trailing: Text("${entry.value} X",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.blue)),
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              decoration: BoxDecoration(
+                  color: Colors.white, borderRadius: BorderRadius.circular(8)),
+              child: ListTile(
+                leading: CircleAvatar(
+                    backgroundColor: Colors.blue.shade50,
+                    child: Text("${index + 1}",
+                        style: const TextStyle(
+                            color: Colors.blue, fontWeight: FontWeight.bold))),
+                title: Text(entry.key, style: const TextStyle(fontSize: 14)),
+                trailing: Text("${entry.value} X",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.blue)),
+              ),
             );
           },
         );
