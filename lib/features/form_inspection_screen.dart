@@ -14,17 +14,14 @@ class FormInspectionScreen extends StatefulWidget {
 }
 
 class _FormInspectionScreenState extends State<FormInspectionScreen> {
-  // --- VARIABEL KONTROL ---
   String? selectedLocation;
   bool isUrgent = false;
   final TextEditingController _descController = TextEditingController();
   bool isSubmitting = false;
 
-  // --- FITUR WAKTU (BACKDATE) ---
   DateTime selectedDate = DateTime.now();
   TimeOfDay selectedTime = TimeOfDay.now();
 
-  // --- VARIABEL MULTI-TYREMAN ---
   List<Map<String, dynamic>> _allUsers = [];
   final List<Map<String, dynamic>> _selectedTeam = [];
   String _searchQuery = "";
@@ -42,7 +39,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     _fetchTyremanList();
   }
 
-  // AMBIL DAFTAR TYREMAN
   Future<void> _fetchTyremanList() async {
     try {
       var snapshot = await FirebaseFirestore.instance
@@ -57,7 +53,8 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     }
   }
 
-  // FUNGSI PILIH JAM
+  // --- FUNGSI NOTIFIKASI DIHAPUS DARI SINI (PINDAH KE CLOUD FUNCTIONS) ---
+
   Future<void> _selectTime(BuildContext context) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
@@ -74,7 +71,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     super.dispose();
   }
 
-  // LOGIKA SIMPAN (ANTI PUTAR-PUTAR / OFFLINE SAKTI)
   Future<void> _submitInspection() async {
     if (selectedLocation == null || _selectedTeam.isEmpty) {
       _showSnackBar("❌ Lengkapi Lokasi & Tim dulu!", Colors.red);
@@ -84,7 +80,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     setState(() => isSubmitting = true);
 
     try {
-      // 1. Susun Waktu & ID Unik
       DateTime finalDateTime = DateTime(
         selectedDate.year,
         selectedDate.month,
@@ -93,20 +88,19 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
         selectedTime.minute,
       );
 
+      // Gunakan lowercase & underscores sesuai aturan Firebase kita
       String docId =
           "${widget.unitCode.toLowerCase()}_${finalDateTime.millisecondsSinceEpoch}";
       List<String> teamNrps =
           _selectedTeam.map((t) => t['nrp'].toString().toLowerCase()).toList();
 
-      // 2. GUNAKAN BATCH (Langsung tembak ke Cache Lokal)
       WriteBatch batch = FirebaseFirestore.instance.batch();
-
       DocumentReference insRef =
           FirebaseFirestore.instance.collection('inspections').doc(docId);
       DocumentReference unitRef =
           FirebaseFirestore.instance.collection('units').doc(widget.unitId);
 
-      // Set History
+      // 1. Simpan Data Inspeksi
       batch.set(insRef, {
         'unit_code': widget.unitCode.toLowerCase(),
         'timestamp': FieldValue.serverTimestamp(),
@@ -116,10 +110,10 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
         'condition': isUrgent ? 'temuan' : 'aman',
         'finding_desc': _descController.text.trim(),
         'team_nrp': teamNrps,
-        'is_accurate': true, // Disederhanakan agar tidak perlu await data unit
+        'is_accurate': true, // Target KPI Accuracy 100%
       });
 
-      // Update Dashboard Warna Unit
+      // 2. Update Status Unit di Koleksi Master
       batch.update(unitRef, {
         'condition': isUrgent ? 'temuan' : 'aman',
         'last_check': DateFormat('yyyy-MM-dd').format(finalDateTime),
@@ -127,13 +121,16 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
         'last_inspector_team': teamNrps,
       });
 
-      // 3. EKSEKUSI TANPA MENUNGGU (PENTING!)
-      batch.commit().catchError((e) => debugPrint("Sync error: $e"));
+      // --- EKSEKUSI BATCH ---
+      await batch.commit();
 
-      // 4. FEEDBACK LANGSUNG
-      _showSnackBar("✅ Tersimpan! (Lokal)", Colors.green);
+      // Feedback user
+      _showSnackBar(
+          isUrgent
+              ? "✅ Temuan Tersimpan! Notif dikirim sistem."
+              : "✅ Laporan Aman Tersimpan!",
+          Colors.green);
 
-      // Beri sedikit nafas sebelum balik ke Dashboard
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) Navigator.pop(context);
       });
@@ -161,7 +158,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // INFO UNIT & JAM
+            // CARD INFO UNIT
             Card(
               color: Colors.blueGrey.shade50,
               elevation: 0,
@@ -190,7 +187,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
             ),
             const SizedBox(height: 20),
 
-            // TIM TYREMAN
+            // PILIH TEAM TYREMAN
             const Text("PILIH TIM TYREMAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -206,7 +203,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
               onChanged: (val) =>
                   setState(() => _searchQuery = val.toLowerCase()),
             ),
-
             if (_searchQuery.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 5),
@@ -239,7 +235,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                       .toList(),
                 ),
               ),
-
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -252,10 +247,9 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                       ))
                   .toList(),
             ),
-
             const Divider(height: 40),
 
-            // LOKASI
+            // INPUT LOKASI
             const Text("LOKASI UNIT",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -269,8 +263,9 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                   .toList(),
               onChanged: (val) => setState(() => selectedLocation = val),
             ),
-
             const SizedBox(height: 20),
+
+            // INPUT TEMUAN
             const Text("CATATAN TEMUAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -283,7 +278,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                     OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
-
             const SizedBox(height: 10),
             SwitchListTile(
               title: const Text("ADA TEMUAN?",
@@ -295,10 +289,9 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
               activeColor: Colors.orange,
               onChanged: (val) => setState(() => isUrgent = val),
             ),
-
             const SizedBox(height: 30),
 
-            // BUTTON KIRIM
+            // TOMBOL SUBMIT
             SizedBox(
               width: double.infinity,
               height: 55,

@@ -40,6 +40,8 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK" />
+                <category android:name="ANDROID.CATEGORY_DEFAULT" />
             </intent-filter>
         </activity>
         

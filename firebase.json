@@ -1,1 +1,39 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tyremonitoringsystem-8efde","appId":"1:611386293758:android:4b34026b6e2eed569b54af","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tyremonitoringsystem-8efde","configurations":{"android":"1:611386293758:android:4b34026b6e2eed569b54af","ios":"1:611386293758:ios:92f48ccedf0c78cb9b54af","macos":"1:611386293758:ios:92f48ccedf0c78cb9b54af","web":"1:611386293758:web:c5536e32e19491a39b54af","windows":"1:611386293758:web:0436cb5ef45977879b54af"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tyremonitoringsystem-8efde",
+          "appId": "1:611386293758:android:4b34026b6e2eed569b54af",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tyremonitoringsystem-8efde",
+          "configurations": {
+            "android": "1:611386293758:android:4b34026b6e2eed569b54af",
+            "ios": "1:611386293758:ios:92f48ccedf0c78cb9b54af",
+            "macos": "1:611386293758:ios:92f48ccedf0c78cb9b54af",
+            "web": "1:611386293758:web:c5536e32e19491a39b54af",
+            "windows": "1:611386293758:web:0436cb5ef45977879b54af"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}
