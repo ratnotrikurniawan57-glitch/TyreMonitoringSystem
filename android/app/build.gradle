@@ -5,6 +5,12 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
@@ -30,25 +36,40 @@ android {
 
     defaultConfig {
         applicationId "com.example.tyre_ms"
-        // 1. Ganti ke 23 supaya Firebase Core stabil
-        minSdkVersion 23 
+        minSdkVersion 23
         targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
-        
-        // 2. Tambahkan multidex supaya tidak error pas nggabungin file
         multiDexEnabled true
     }
 
     compileOptions {
-        // 3. Ganti ke VERSION_17 supaya cocok dengan Java 21
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    // 4. Tambahkan ini khusus untuk Kotlin
     kotlinOptions {
         jvmTarget = '17'
+    }
+
+    signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
     }
 }
 
@@ -57,6 +78,5 @@ flutter {
 }
 
 dependencies {
-    // 5. Tambahkan ini sebagai pengaman tambahan
     implementation "androidx.multidex:multidex:2.0.1"
 }
