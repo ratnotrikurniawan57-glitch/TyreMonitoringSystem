@@ -1,10 +1,9 @@
-// ignore_for_file: use_build_context_synchronously
-
-import 'package:flutter/material.dart';
+// ignore_for_file: use_build_context_synchronously, avoid_types_as_parameter_names
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tyre_ms/features/form_inspection_screen.dart';
-import '../model/unit_model.dart'; // Pastikan import model
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../features/form_inspection_screen.dart';
 
 class TyremanTab extends StatefulWidget {
   const TyremanTab({super.key});
@@ -18,14 +17,12 @@ class _TyremanTabState extends State<TyremanTab>
   String searchQuery = "";
   late AnimationController _blinkController;
 
-  // Ambil NRP dari email login (contoh: 12345@gmail.com jadi 12345)
   String get _currentNRP =>
       FirebaseAuth.instance.currentUser?.email?.split('@')[0] ?? "unknown";
 
   @override
   void initState() {
     super.initState();
-    // Setting Animasi Kedip 500ms
     _blinkController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -38,7 +35,6 @@ class _TyremanTabState extends State<TyremanTab>
     super.dispose();
   }
 
-  // --- FUNGSI QUICK CLOSE (DIJALANKAN SAAT KUNING DI-TAP) ---
   void _showCloseFindingDialog(String unitId) {
     showDialog(
       context: context,
@@ -76,16 +72,22 @@ class _TyremanTabState extends State<TyremanTab>
 
   @override
   Widget build(BuildContext context) {
+    DateTime now = DateTime.now();
+    int hariIni = now.weekday;
+    String tglIni = DateFormat('yyyy-MM-dd').format(now);
+    int groupProdHariIni = (now.day % 3) == 0 ? 3 : (now.day % 3);
+
     return Scaffold(
       body: Column(
         children: [
           // Search Bar
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12.0),
             child: TextField(
               decoration: InputDecoration(
                 hintText: "Cari Kode Unit...",
                 prefixIcon: const Icon(Icons.search),
+                isDense: true,
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -94,7 +96,6 @@ class _TyremanTabState extends State<TyremanTab>
             ),
           ),
 
-          // Daftar Unit (GridView agar muat banyak)
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream:
@@ -104,23 +105,40 @@ class _TyremanTabState extends State<TyremanTab>
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                // 1. MAPPING DATA & PENENTUAN WARNA
                 var docs = snapshot.data!.docs
                     .map((doc) {
                       var data = doc.data() as Map<String, dynamic>;
-                      String status = UnitModel.getStatusColor(
-                        data['plan_group'] ?? 1,
-                        data['condition'] ?? 'aman',
-                        data['updated_at'] as Timestamp?,
-                      );
-                      return {'doc': doc, 'status': status, 'id': doc.id};
+                      String id = doc.id;
+                      String condition = data['condition'] ?? 'aman';
+                      String? lastCheck = data['last_check'];
+                      int group = data['plan_group'] ?? 1;
+                      int target = data['kpi_target'] ?? 10;
+
+                      // LOGIKA WARNA SAKTI
+                      String status = 'white'; // Default
+
+                      if (condition != 'aman') {
+                        status = 'yellow_blink'; // Prioritas 1: Rusak/Temuan
+                      } else {
+                        // Cek apakah jadwalnya hari ini
+                        bool isJadwal = (target == 10)
+                            ? (group == groupProdHariIni)
+                            : (group == hariIni);
+
+                        if (isJadwal && lastCheck != tglIni) {
+                          status = 'red'; // Prioritas 2: Jadwal Cek & Belum Cek
+                        } else if (lastCheck == tglIni) {
+                          status = 'green'; // Prioritas 3: Sudah Cek Hari Ini
+                        }
+                      }
+
+                      return {'data': data, 'status': status, 'id': id};
                     })
                     .where(
                         (item) => item['id'].toString().contains(searchQuery))
                     .toList();
 
-                // 2. LOGIKA SORTING PRIORITAS
-                // Urutan: 1.Kuning Kedip, 2.Merah, 3.Putih, 4.Hijau
+                // SORTING
                 docs.sort((a, b) {
                   Map<String, int> priority = {
                     'yellow_blink': 1,
@@ -135,9 +153,9 @@ class _TyremanTabState extends State<TyremanTab>
                 });
 
                 return GridView.builder(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4, // 4 kotak ke samping
+                    crossAxisCount: 4,
                     mainAxisSpacing: 8,
                     crossAxisSpacing: 8,
                   ),
@@ -153,36 +171,25 @@ class _TyremanTabState extends State<TyremanTab>
                           _showCloseFindingDialog(id);
                         } else {
                           Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => FormInspectionScreen(
-                                unitId: id,
-                                unitCode: id,
-                              ),
-                            ),
-                          );
+                              context,
+                              MaterialPageRoute(
+                                  builder: (c) => FormInspectionScreen(
+                                        unitId: id,
+                                        unitCode: id,
+                                      )));
                         }
                       },
                       child: AnimatedBuilder(
                         animation: _blinkController,
                         builder: (context, child) {
-                          // PENENTUAN WARNA BACKGROUND
-                          Color bgColor;
-                          switch (status) {
-                            case 'red':
-                              bgColor = Colors.red;
-                              break;
-                            case 'green':
-                              bgColor = Colors.green;
-                              break;
-                            case 'yellow_blink':
-                              bgColor = Color.lerp(
-                                  Colors.yellow.shade700,
-                                  Colors.orange.shade900,
-                                  _blinkController.value)!;
-                              break;
-                            default:
-                              bgColor = Colors.white;
+                          Color bgColor = Colors.white;
+                          if (status == 'red') bgColor = Colors.red;
+                          if (status == 'green') bgColor = Colors.green;
+                          if (status == 'yellow_blink') {
+                            bgColor = Color.lerp(
+                                Colors.yellow.shade700,
+                                Colors.orange.shade900,
+                                _blinkController.value)!;
                           }
 
                           return Container(
@@ -190,14 +197,6 @@ class _TyremanTabState extends State<TyremanTab>
                               color: bgColor,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Colors.grey.shade300),
-                              boxShadow: status == 'yellow_blink'
-                                  ? [
-                                      BoxShadow(
-                                          color: Colors.orange.withOpacity(0.5),
-                                          blurRadius: 5,
-                                          spreadRadius: 1)
-                                    ]
-                                  : null,
                             ),
                             child: Center(
                               child: Text(

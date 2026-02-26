@@ -13,41 +13,97 @@ class AdminTab extends StatefulWidget {
 
 class _AdminTabState extends State<AdminTab> {
   String _filterPeriode = "1";
+  final List<String> _namaHari = [
+    "",
+    "Senin",
+    "Selasa",
+    "Rabu",
+    "Kamis",
+    "Jumat",
+    "Sabtu",
+    "Minggu"
+  ];
 
-  // FUNGSI UPDATE GRUP UNIT
-  void _quickEditPlan(String docId, int currentPlan) {
+  void _quickEditPlan(String docId, int currentPlan, int target) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Update Periode: ${docId.toUpperCase()}"),
+        title: Text("OPSI UNIT: ${docId.toUpperCase()}"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Pilih Group Baru:"),
+            Text(target == 4 ? "Ganti Hari Cek:" : "Pilih Group Baru:"),
             const SizedBox(height: 15),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [1, 2, 3].map((num) {
-                return ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        currentPlan == num ? Colors.blue : Colors.grey.shade300,
-                    foregroundColor:
-                        currentPlan == num ? Colors.white : Colors.black,
-                  ),
-                  onPressed: () async {
-                    await FirebaseFirestore.instance
-                        .collection('units')
-                        .doc(docId)
-                        .update({'plan_group': num});
-                    Navigator.pop(context);
-                  },
-                  child: Text("$num"),
-                );
-              }).toList(),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: (target == 4 ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3])
+                    .map((num) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: currentPlan == num
+                            ? Colors.blue
+                            : Colors.grey.shade300,
+                        foregroundColor:
+                            currentPlan == num ? Colors.white : Colors.black,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: () async {
+                        await FirebaseFirestore.instance
+                            .collection('units')
+                            .doc(docId)
+                            .update({'plan_group': num});
+                        Navigator.pop(context);
+                      },
+                      child: Text(target == 4
+                          ? _namaHari[num].substring(0, 3)
+                          : "$num"),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+            TextButton.icon(
+              icon: const Icon(Icons.delete_forever, color: Colors.red),
+              label: const Text("HAPUS UNIT INI",
+                  style: TextStyle(color: Colors.red)),
+              onPressed: () => _confirmDeleteUnit(docId),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmDeleteUnit(String docId) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text("Konfirmasi"),
+        content: Text("Yakin mau hapus unit ${docId.toUpperCase()}?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c), child: const Text("BATAL")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('units')
+                  .doc(docId)
+                  .delete();
+              Navigator.pop(c);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("🗑️ Unit Berhasil Dihapus!")));
+            },
+            child: const Text("HAPUS", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -57,7 +113,6 @@ class _AdminTabState extends State<AdminTab> {
     return Scaffold(
       body: Column(
         children: [
-          // MENU UTAMA ATAS
           Padding(
             padding: const EdgeInsets.all(15.0),
             child: Row(
@@ -72,29 +127,34 @@ class _AdminTabState extends State<AdminTab> {
                 _menuBtn("TAMBAH\nUNIT", Icons.add_box, Colors.green,
                     () => _showAddUnitDialog(context)),
                 const SizedBox(width: 10),
-                _menuBtn("IMPORT\n117 UNIT", Icons.cloud_download,
+                _menuBtn("SYNC MASTER\nUNIT DATA", Icons.cloud_download,
                     Colors.purple, _importMassal),
               ],
             ),
           ),
           const Divider(thickness: 2),
-
-          // FILTER PERIODE P1, P2, P3
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 15.0),
+          // Filter Group Produksi
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 15),
             child: Row(
               children: [
-                _buildFilterButton("P1", "1"),
-                const SizedBox(width: 10),
-                _buildFilterButton("P2", "2"),
-                const SizedBox(width: 10),
-                _buildFilterButton("P3", "3"),
+                _buildFilterButton("G1", "1"),
+                const SizedBox(width: 5),
+                _buildFilterButton("G2", "2"),
+                const SizedBox(width: 5),
+                _buildFilterButton("G3", "3"),
+                const SizedBox(width: 5),
+                const VerticalDivider(),
+                ...[1, 2, 3, 4, 5, 6, 7].map((h) => Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: _buildFilterButton(
+                          _namaHari[h].substring(0, 3), h.toString()),
+                    )),
               ],
             ),
           ),
           const SizedBox(height: 10),
-
-          // GRID DAFTAR UNIT
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream:
@@ -103,14 +163,10 @@ class _AdminTabState extends State<AdminTab> {
                 if (!snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
-                // Filter berdasarkan tombol P1/P2/P3
-                var docs = snap.data!.docs.where((d) {
-                  return d['plan_group'].toString() == _filterPeriode;
-                }).toList();
-
+                var docs = snap.data!.docs
+                    .where((d) => d['plan_group'].toString() == _filterPeriode)
+                    .toList();
                 docs.sort((a, b) => (a.id).compareTo(b.id));
-
                 if (docs.isEmpty) {
                   return const Center(child: Text("Data tidak ditemukan"));
                 }
@@ -126,10 +182,10 @@ class _AdminTabState extends State<AdminTab> {
                   itemBuilder: (context, i) {
                     var d = docs[i].data() as Map<String, dynamic>;
                     String id = docs[i].id;
-                    int p = d['plan_group'] is int ? d['plan_group'] : 1;
-
+                    int p = d['plan_group'] ?? 1;
+                    int target = d['kpi_target'] ?? 10;
                     return InkWell(
-                      onTap: () => _quickEditPlan(id, p),
+                      onTap: () => _quickEditPlan(id, p, target),
                       child: Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -141,21 +197,14 @@ class _AdminTabState extends State<AdminTab> {
                           children: [
                             Text(id.toUpperCase(),
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 11),
-                                textAlign: TextAlign.center),
+                                    fontWeight: FontWeight.bold, fontSize: 10)),
                             const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 2),
-                              decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(4)),
-                              child: Text("G: $p",
-                                  style: const TextStyle(
-                                      fontSize: 9,
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.bold)),
-                            ),
+                            Text(target == 4 ? "SUP" : "PROD",
+                                style: TextStyle(
+                                    fontSize: 8,
+                                    color: target == 4
+                                        ? Colors.orange
+                                        : Colors.green)),
                           ],
                         ),
                       ),
@@ -170,32 +219,26 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // WIDGET TOMBOL FILTER
   Widget _buildFilterButton(String label, String value) {
     bool isActive = _filterPeriode == value;
-    return Expanded(
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isActive ? Colors.blue : Colors.grey.shade200,
-          foregroundColor: isActive ? Colors.white : Colors.black,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        onPressed: () => setState(() => _filterPeriode = value),
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        backgroundColor: isActive ? Colors.blue : Colors.grey.shade200,
+        foregroundColor: isActive ? Colors.white : Colors.black,
       ),
+      onPressed: () => setState(() => _filterPeriode = value),
+      child: Text(label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
     );
   }
 
-  // FUNGSI IMPORT MASSAL (VERSI TERBARU)
   Future<void> _importMassal() async {
     showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (c) => const Center(child: CircularProgressIndicator()),
-    );
-
-    for (var i = 0; i < UnitModel.masterDataList.length; i++) {
-      var item = UnitModel.masterDataList[i];
+        context: context,
+        barrierDismissible: false,
+        builder: (c) => const Center(child: CircularProgressIndicator()));
+    for (var item in UnitModel.masterDataList) {
       await FirebaseFirestore.instance
           .collection('units')
           .doc(item['code'].toString().toLowerCase())
@@ -203,22 +246,23 @@ class _AdminTabState extends State<AdminTab> {
         'unit_code': item['code'].toString().toLowerCase(),
         'brand': item['brand'].toString().toUpperCase(),
         'vehicle_desc': item['desc'].toString().toUpperCase(),
-        'plan_group': (i % 3) + 1, // Otomatis bagi P1, P2, P3
-        'condition': 'aman', // Default awal
-        'updated_at': null, // Agar terbaca belum dicek
+        'plan_group': item['group'] ?? 1,
+        'kpi_target': item['target'] ?? 10,
+        'condition': 'aman',
+        'last_check': null,
       });
     }
-    Navigator.pop(context); // Tutup Loading
+    Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Sukses Import 117 Unit!")));
+        const SnackBar(content: Text("✅ Sukses Sync 147 Unit dengan Target!")));
   }
 
-  // FUNGSI TAMBAH UNIT MANUAL
   void _showAddUnitDialog(BuildContext context) {
     final unitController = TextEditingController();
     String? selectedBrand;
     String? selectedDesc;
     int selectedPlan = 1;
+    int selectedTarget = 10;
 
     showDialog(
       context: context,
@@ -232,23 +276,44 @@ class _AdminTabState extends State<AdminTab> {
                 TextField(
                     controller: unitController,
                     decoration: const InputDecoration(labelText: "Kode Unit")),
-                const SizedBox(height: 10),
                 _buildDynamicDropdown("brands", "Brand", selectedBrand,
                     (val) => setDialogState(() => selectedBrand = val)),
-                const SizedBox(height: 10),
                 _buildDynamicDropdown("descriptions", "Desc", selectedDesc,
                     (val) => setDialogState(() => selectedDesc = val)),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 10,
-                  children: [1, 2, 3]
-                      .map((n) => ChoiceChip(
-                            label: Text("Grup $n"),
-                            selected: selectedPlan == n,
+                const SizedBox(height: 15),
+                const Text("Target Check:"),
+                Row(
+                  children: [
+                    Expanded(
+                        child: ChoiceChip(
+                            label: const Text("10x (Prod)"),
+                            selected: selectedTarget == 10,
                             onSelected: (s) =>
-                                setDialogState(() => selectedPlan = n),
-                          ))
-                      .toList(),
+                                setDialogState(() => selectedTarget = 10))),
+                    const SizedBox(width: 10),
+                    Expanded(
+                        child: ChoiceChip(
+                            label: const Text("4x (Supp)"),
+                            selected: selectedTarget == 4,
+                            onSelected: (s) =>
+                                setDialogState(() => selectedTarget = 4))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(selectedTarget == 10 ? "Pilih Group:" : "Pilih Hari:"),
+                Wrap(
+                  spacing: 5,
+                  children:
+                      (selectedTarget == 10 ? [1, 2, 3] : [1, 2, 3, 4, 5, 6, 7])
+                          .map((n) => ChoiceChip(
+                                label: Text(selectedTarget == 10
+                                    ? "G$n"
+                                    : _namaHari[n].substring(0, 3)),
+                                selected: selectedPlan == n,
+                                onSelected: (s) =>
+                                    setDialogState(() => selectedPlan = n),
+                              ))
+                          .toList(),
                 ),
               ],
             ),
@@ -268,8 +333,9 @@ class _AdminTabState extends State<AdminTab> {
                     'brand': selectedBrand ?? "UNKNOWN",
                     'vehicle_desc': selectedDesc ?? "UNKNOWN",
                     'plan_group': selectedPlan,
+                    'kpi_target': selectedTarget,
                     'condition': 'aman',
-                    'updated_at': null,
+                    'last_check': null,
                   });
                   Navigator.pop(context);
                 }
@@ -282,7 +348,6 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  // DROPDOWN DINAMIS (Brand & Desc)
   Widget _buildDynamicDropdown(
       String coll, String label, String? current, Function(String?) onChanged) {
     return StreamBuilder<DocumentSnapshot>(
@@ -298,19 +363,16 @@ class _AdminTabState extends State<AdminTab> {
         return Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<String>(
-                value: current,
-                decoration: InputDecoration(labelText: label),
-                items: items
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: onChanged,
-              ),
-            ),
+                child: DropdownButtonFormField<String>(
+                    value: current,
+                    decoration: InputDecoration(labelText: label),
+                    items: items
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: onChanged)),
             IconButton(
-              icon: const Icon(Icons.add_circle, color: Colors.green),
-              onPressed: () => _showAddMasterDialog(coll),
-            )
+                icon: const Icon(Icons.add_circle, color: Colors.green),
+                onPressed: () => _showAddMasterDialog(coll))
           ],
         );
       },
@@ -320,53 +382,50 @@ class _AdminTabState extends State<AdminTab> {
   void _showAddMasterDialog(String coll) {
     final controller = TextEditingController();
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Tambah ${coll.toUpperCase()}"),
-        content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: "Nama...")),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("BATAL")),
-          ElevatedButton(
-              onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('settings')
-                    .doc(coll)
-                    .set({
-                  'list': FieldValue.arrayUnion(
-                      [controller.text.trim().toUpperCase()])
-                }, SetOptions(merge: true));
-                Navigator.pop(context);
-              },
-              child: const Text("SIMPAN")),
-        ],
-      ),
-    );
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text("Tambah ${coll.toUpperCase()}"),
+              content: TextField(
+                  controller: controller,
+                  decoration: const InputDecoration(hintText: "Nama...")),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("BATAL")),
+                ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseFirestore.instance
+                          .collection('settings')
+                          .doc(coll)
+                          .set({
+                        'list': FieldValue.arrayUnion(
+                            [controller.text.trim().toUpperCase()])
+                      }, SetOptions(merge: true));
+                      Navigator.pop(context);
+                    },
+                    child: const Text("SIMPAN")),
+              ],
+            ));
   }
 
   Widget _menuBtn(String t, IconData i, Color c, VoidCallback onTap) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-              color: c.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: c)),
-          child: Column(children: [
-            Icon(i, color: c),
-            const SizedBox(height: 5),
-            Text(t,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: c, fontSize: 9, fontWeight: FontWeight.bold))
-          ]),
-        ),
-      ),
-    );
+        child: InkWell(
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                  color: c.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c)),
+              child: Column(children: [
+                Icon(i, color: c),
+                const SizedBox(height: 5),
+                Text(t,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: c, fontSize: 8, fontWeight: FontWeight.bold))
+              ]),
+            )));
   }
 }

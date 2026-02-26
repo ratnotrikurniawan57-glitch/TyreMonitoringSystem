@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class FormInspectionScreen extends StatefulWidget {
   final String unitCode;
@@ -15,7 +16,7 @@ class FormInspectionScreen extends StatefulWidget {
 class _FormInspectionScreenState extends State<FormInspectionScreen> {
   // --- VARIABEL KONTROL ---
   String? selectedLocation;
-  bool isUrgent = false; // Switch Kuning
+  bool isUrgent = false;
   final TextEditingController _descController = TextEditingController();
   bool isSubmitting = false;
 
@@ -54,7 +55,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     super.dispose();
   }
 
-  // LOGIKA SIMPAN DATA
+  // LOGIKA SIMPAN DATA (Sakti & Akurat)
   Future<void> _submitInspection() async {
     if (selectedLocation == null) {
       _showSnackBar("❌ Pilih Lokasi dulu!", Colors.red);
@@ -68,41 +69,54 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     setState(() => isSubmitting = true);
 
     try {
-      // 1. Ambil Data Unit untuk cek Akurasi
+      // 1. Ambil Data Unit untuk cek Akurasi & Target
       var unitDoc = await FirebaseFirestore.instance
           .collection('units')
           .doc(widget.unitId)
           .get();
+      var data = unitDoc.data() ?? {};
 
-      int planGroup = unitDoc.data()?['plan_group'] ?? 0;
-      int day = DateTime.now().day;
+      int planGroup = data['plan_group'] ?? 0;
+      int kpiTarget = data['kpi_target'] ?? 10;
 
-      // Hitung apakah hari ini memang jadwalnya dia (Target 100% KPI)
-      bool isAccurate =
-          (day % 3 == planGroup % 3) || (day % 3 == 0 && planGroup == 3);
+      DateTime now = DateTime.now();
+      String tanggalHariIni = DateFormat('yyyy-MM-dd').format(now);
 
-      // 2. Mapping NRP Tim
+      // 2. LOGIKA AKURASI SAKTI (Produksi vs Support)
+      bool isAccurate = false;
+      if (kpiTarget == 10) {
+        // Rumus Produksi: Rotasi 3 hari (Grup 1, 2, 3)
+        int groupProdHariIni = (now.day % 3) == 0 ? 3 : (now.day % 3);
+        isAccurate = (planGroup == groupProdHariIni);
+      } else {
+        // Rumus Support: Sesuai Hari Kalender (weekday 1-7)
+        isAccurate = (planGroup == now.weekday);
+      }
+
+      // 3. Mapping NRP Tim (Pastikan lowercase sesuai aturan Firebase kita)
       List<String> teamNrps =
-          _selectedTeam.map((t) => t['nrp'].toString()).toList();
+          _selectedTeam.map((t) => t['nrp'].toString().toLowerCase()).toList();
 
-      // 3. Simpan ke Riwayat Inspeksi (History)
+      // 4. Simpan ke Riwayat Inspeksi (History)
       await FirebaseFirestore.instance.collection('inspections').add({
         'unit_code': widget.unitCode.toLowerCase(),
         'timestamp': FieldValue.serverTimestamp(),
+        'tanggal_cek': tanggalHariIni,
         'lokasi': selectedLocation!.toLowerCase(),
-        'condition': isUrgent ? 'temuan' : 'aman', // Sesuai Logika Dashboard
+        'condition': isUrgent ? 'temuan' : 'aman',
         'finding_desc': _descController.text.trim(),
         'team_nrp': teamNrps,
         'is_accurate': isAccurate,
       });
 
-      // 4. Update Status di Dokumen Unit (Real-time Dashboard)
+      // 5. Update Status di Dokumen Unit (INILAH YANG MERUBAH WARNA DASHBOARD)
       await FirebaseFirestore.instance
           .collection('units')
           .doc(widget.unitId)
           .update({
         'condition': isUrgent ? 'temuan' : 'aman',
-        'updated_at': FieldValue.serverTimestamp(), // Penentu warna Hijau
+        'last_check': tanggalHariIni, // Kunci agar unit jadi Putih/Hijau
+        'updated_at': FieldValue.serverTimestamp(),
         'last_inspector_team': teamNrps,
       });
 
@@ -149,7 +163,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
             ),
             const SizedBox(height: 20),
 
-            // INPUT TIM (MULTI-USER)
+            // INPUT TIM TYREMAN
             const Text("PILIH TIM TYREMAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -166,7 +180,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                   setState(() => _searchQuery = val.toLowerCase()),
             ),
 
-            // HASIL PENCARIAN
+            // HASIL PENCARIAN USER
             if (_searchQuery.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 5),
@@ -216,7 +230,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
 
             const Divider(height: 40),
 
-            // LOKASI & TEMUAN
+            // LOKASI UNIT
             const Text("LOKASI UNIT",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -232,6 +246,8 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
             ),
 
             const SizedBox(height: 20),
+
+            // CATATAN TEMUAN
             const Text("CATATAN TAMBAHAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -246,7 +262,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
 
             const SizedBox(height: 10),
 
-            // LOGIKA KUNING KEDIP (URGENT)
+            // TOGGLE TEMUAN (KUNING KEDIP)
             Container(
               decoration: BoxDecoration(
                 color: isUrgent ? Colors.orange.shade50 : Colors.transparent,
@@ -267,7 +283,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
 
             const SizedBox(height: 30),
 
-            // BUTTON SUBMIT
+            // TOMBOL KIRIM
             SizedBox(
               width: double.infinity,
               height: 55,
