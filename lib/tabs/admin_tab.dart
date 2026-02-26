@@ -13,6 +13,10 @@ class AdminTab extends StatefulWidget {
 
 class _AdminTabState extends State<AdminTab> {
   String _filterPeriode = "1";
+  String _searchText = ""; // Variabel untuk Search
+  final TextEditingController _searchController =
+      TextEditingController(); // Controller Search
+
   final List<String> _namaHari = [
     "",
     "Senin",
@@ -132,8 +136,36 @@ class _AdminTabState extends State<AdminTab> {
               ],
             ),
           ),
+
+          // BARU: Kotak Search Unit
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: "Cari Kode Unit...",
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchText.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchText = "");
+                        })
+                    : null,
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onChanged: (val) {
+                setState(() => _searchText = val.toLowerCase());
+              },
+            ),
+          ),
+
           const Divider(thickness: 2),
-          // Filter Group Produksi
+
+          // Filter Group & Hari (Scrollable ke samping)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -144,12 +176,14 @@ class _AdminTabState extends State<AdminTab> {
                 _buildFilterButton("G2", "2"),
                 const SizedBox(width: 5),
                 _buildFilterButton("G3", "3"),
-                const SizedBox(width: 5),
-                const VerticalDivider(),
+                const SizedBox(width: 10),
+                Container(width: 1, height: 30, color: Colors.grey.shade400),
+                const SizedBox(width: 10),
+                // Gunakan awalan H agar tidak tabrakan dengan G1-G3
                 ...[1, 2, 3, 4, 5, 6, 7].map((h) => Padding(
                       padding: const EdgeInsets.only(right: 5),
                       child: _buildFilterButton(
-                          _namaHari[h].substring(0, 3), h.toString()),
+                          _namaHari[h].substring(0, 3), "H$h"),
                     )),
               ],
             ),
@@ -163,9 +197,31 @@ class _AdminTabState extends State<AdminTab> {
                 if (!snap.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                var docs = snap.data!.docs
-                    .where((d) => d['plan_group'].toString() == _filterPeriode)
-                    .toList();
+
+                // REVISI: Logika filtering gabungan Search & H1-H7
+                var docs = snap.data!.docs.where((d) {
+                  var data = d.data() as Map<String, dynamic>;
+                  String id = d.id.toLowerCase();
+                  String p = data['plan_group'].toString();
+                  int target = data['kpi_target'] ?? 10;
+
+                  // 1. Cek Search
+                  bool matchesSearch = id.contains(_searchText);
+
+                  // 2. Cek Filter Group/Hari
+                  bool matchesFilter = false;
+                  if (_filterPeriode.startsWith("H")) {
+                    // Logic untuk Support (target 4x)
+                    String hariAngka = _filterPeriode.substring(1);
+                    matchesFilter = (target == 4 && p == hariAngka);
+                  } else {
+                    // Logic untuk Produksi (target 10x)
+                    matchesFilter = (target == 10 && p == _filterPeriode);
+                  }
+
+                  return matchesSearch && matchesFilter;
+                }).toList();
+
                 docs.sort((a, b) => (a.id).compareTo(b.id));
                 if (docs.isEmpty) {
                   return const Center(child: Text("Data tidak ditemukan"));
