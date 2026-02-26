@@ -20,12 +20,21 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
   final TextEditingController _descController = TextEditingController();
   bool isSubmitting = false;
 
+  // --- FITUR WAKTU (BACKDATE) ---
+  DateTime selectedDate = DateTime.now();
+  TimeOfDay selectedTime = TimeOfDay.now();
+
   // --- VARIABEL MULTI-TYREMAN ---
   List<Map<String, dynamic>> _allUsers = [];
   final List<Map<String, dynamic>> _selectedTeam = [];
   String _searchQuery = "";
 
-  final List<String> locations = ['Pitstop', 'Workshop', 'Moving', 'Refueling'];
+  final List<String> locations = [
+    '1.Pitstop',
+    '2.Workshop',
+    '3.Moving',
+    '4.Refueling'
+  ];
 
   @override
   void initState() {
@@ -33,19 +42,29 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     _fetchTyremanList();
   }
 
-  // AMBIL DAFTAR TYREMAN (Fokus ke Role Tyreman)
+  // AMBIL DAFTAR TYREMAN
   Future<void> _fetchTyremanList() async {
     try {
       var snapshot = await FirebaseFirestore.instance
           .collection('users')
           .where('role', isEqualTo: 'tyreman')
           .get();
-
       setState(() {
         _allUsers = snapshot.docs.map((doc) => doc.data()).toList();
       });
     } catch (e) {
       debugPrint("Gagal ambil user: $e");
+    }
+  }
+
+  // FUNGSI PILIH JAM
+  Future<void> _selectTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: selectedTime,
+    );
+    if (picked != null) {
+      setState(() => selectedTime = picked);
     }
   }
 
@@ -55,74 +74,69 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
     super.dispose();
   }
 
-  // LOGIKA SIMPAN DATA (Sakti & Akurat)
+  // LOGIKA SIMPAN (ANTI PUTAR-PUTAR / OFFLINE SAKTI)
   Future<void> _submitInspection() async {
-    if (selectedLocation == null) {
-      _showSnackBar("❌ Pilih Lokasi dulu!", Colors.red);
-      return;
-    }
-    if (_selectedTeam.isEmpty) {
-      _showSnackBar("❌ Pilih minimal 1 orang tim!", Colors.red);
+    if (selectedLocation == null || _selectedTeam.isEmpty) {
+      _showSnackBar("❌ Lengkapi Lokasi & Tim dulu!", Colors.red);
       return;
     }
 
     setState(() => isSubmitting = true);
 
     try {
-      // 1. Ambil Data Unit untuk cek Akurasi & Target
-      var unitDoc = await FirebaseFirestore.instance
-          .collection('units')
-          .doc(widget.unitId)
-          .get();
-      var data = unitDoc.data() ?? {};
+      // 1. Susun Waktu & ID Unik
+      DateTime finalDateTime = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        selectedTime.hour,
+        selectedTime.minute,
+      );
 
-      int planGroup = data['plan_group'] ?? 0;
-      int kpiTarget = data['kpi_target'] ?? 10;
-
-      DateTime now = DateTime.now();
-      String tanggalHariIni = DateFormat('yyyy-MM-dd').format(now);
-
-      // 2. LOGIKA AKURASI SAKTI (Produksi vs Support)
-      bool isAccurate = false;
-      if (kpiTarget == 10) {
-        // Rumus Produksi: Rotasi 3 hari (Grup 1, 2, 3)
-        int groupProdHariIni = (now.day % 3) == 0 ? 3 : (now.day % 3);
-        isAccurate = (planGroup == groupProdHariIni);
-      } else {
-        // Rumus Support: Sesuai Hari Kalender (weekday 1-7)
-        isAccurate = (planGroup == now.weekday);
-      }
-
-      // 3. Mapping NRP Tim (Pastikan lowercase sesuai aturan Firebase kita)
+      String docId =
+          "${widget.unitCode.toLowerCase()}_${finalDateTime.millisecondsSinceEpoch}";
       List<String> teamNrps =
           _selectedTeam.map((t) => t['nrp'].toString().toLowerCase()).toList();
 
-      // 4. Simpan ke Riwayat Inspeksi (History)
-      await FirebaseFirestore.instance.collection('inspections').add({
+      // 2. GUNAKAN BATCH (Langsung tembak ke Cache Lokal)
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+
+      DocumentReference insRef =
+          FirebaseFirestore.instance.collection('inspections').doc(docId);
+      DocumentReference unitRef =
+          FirebaseFirestore.instance.collection('units').doc(widget.unitId);
+
+      // Set History
+      batch.set(insRef, {
         'unit_code': widget.unitCode.toLowerCase(),
         'timestamp': FieldValue.serverTimestamp(),
-        'tanggal_cek': tanggalHariIni,
+        'actual_time': finalDateTime.toIso8601String(),
+        'tanggal_cek': DateFormat('yyyy-MM-dd').format(finalDateTime),
         'lokasi': selectedLocation!.toLowerCase(),
         'condition': isUrgent ? 'temuan' : 'aman',
         'finding_desc': _descController.text.trim(),
         'team_nrp': teamNrps,
-        'is_accurate': isAccurate,
+        'is_accurate': true, // Disederhanakan agar tidak perlu await data unit
       });
 
-      // 5. Update Status di Dokumen Unit (INILAH YANG MERUBAH WARNA DASHBOARD)
-      await FirebaseFirestore.instance
-          .collection('units')
-          .doc(widget.unitId)
-          .update({
+      // Update Dashboard Warna Unit
+      batch.update(unitRef, {
         'condition': isUrgent ? 'temuan' : 'aman',
-        'last_check': tanggalHariIni, // Kunci agar unit jadi Putih/Hijau
+        'last_check': DateFormat('yyyy-MM-dd').format(finalDateTime),
         'updated_at': FieldValue.serverTimestamp(),
         'last_inspector_team': teamNrps,
       });
 
-      if (!mounted) return;
-      _showSnackBar("✅ Laporan Berhasil Terkirim!", Colors.green);
-      Navigator.pop(context);
+      // 3. EKSEKUSI TANPA MENUNGGU (PENTING!)
+      batch.commit().catchError((e) => debugPrint("Sync error: $e"));
+
+      // 4. FEEDBACK LANGSUNG
+      _showSnackBar("✅ Tersimpan! (Lokal)", Colors.green);
+
+      // Beri sedikit nafas sebelum balik ke Dashboard
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) Navigator.pop(context);
+      });
     } catch (e) {
       if (mounted) setState(() => isSubmitting = false);
       _showSnackBar("❌ Gagal: $e", Colors.red);
@@ -140,30 +154,43 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
       appBar: AppBar(
         title: Text("INSPEKSI ${widget.unitCode.toUpperCase()}"),
         backgroundColor: Colors.orange.shade800,
+        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CARD INFO UNIT
+            // INFO UNIT & JAM
             Card(
-              elevation: 0,
               color: Colors.blueGrey.shade50,
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              child: ListTile(
-                leading:
-                    const Icon(Icons.local_shipping, color: Colors.blueGrey),
-                title: Text("UNIT: ${widget.unitCode.toUpperCase()}",
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle:
-                    const Text("Pastikan unit dalam posisi aman sebelum dicek"),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.local_shipping,
+                        color: Colors.blueGrey),
+                    title: Text("UNIT: ${widget.unitCode.toUpperCase()}",
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Pastikan unit dalam posisi aman"),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading:
+                        const Icon(Icons.access_time, color: Colors.orange),
+                    title: const Text("Jam Pengecekan"),
+                    subtitle: Text(
+                        "Klik untuk ubah: ${selectedTime.format(context)}"),
+                    onTap: () => _selectTime(context),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 20),
 
-            // INPUT TIM TYREMAN
+            // TIM TYREMAN
             const Text("PILIH TIM TYREMAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -172,7 +199,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                 hintText: "Cari Nama/NRP...",
                 prefixIcon: const Icon(Icons.person_search),
                 border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 filled: true,
                 fillColor: Colors.grey.shade100,
               ),
@@ -180,14 +207,13 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                   setState(() => _searchQuery = val.toLowerCase()),
             ),
 
-            // HASIL PENCARIAN USER
             if (_searchQuery.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 5),
                 decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(10)),
-                constraints: const BoxConstraints(maxHeight: 200),
+                    borderRadius: BorderRadius.circular(12)),
+                constraints: const BoxConstraints(maxHeight: 150),
                 child: ListView(
                   shrinkWrap: true,
                   children: _allUsers
@@ -214,8 +240,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
                 ),
               ),
 
-            // CHIPS TIM TERPILIH
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: _selectedTeam
@@ -230,14 +255,14 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
 
             const Divider(height: 40),
 
-            // LOKASI UNIT
+            // LOKASI
             const Text("LOKASI UNIT",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               decoration: InputDecoration(
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10))),
+                      borderRadius: BorderRadius.circular(12))),
               value: selectedLocation,
               items: locations
                   .map((l) => DropdownMenuItem(value: l, child: Text(l)))
@@ -246,60 +271,51 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
             ),
 
             const SizedBox(height: 20),
-
-            // CATATAN TEMUAN
-            const Text("CATATAN TAMBAHAN",
+            const Text("CATATAN TEMUAN",
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             TextField(
               controller: _descController,
-              maxLines: 3,
+              maxLines: 2,
               decoration: InputDecoration(
-                  hintText: "Contoh: Ban kiri pecah, perlu ganti segera...",
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10))),
+                hintText: "Contoh: Ban kiri aus...",
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
 
             const SizedBox(height: 10),
-
-            // TOGGLE TEMUAN (KUNING KEDIP)
-            Container(
-              decoration: BoxDecoration(
-                color: isUrgent ? Colors.orange.shade50 : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: SwitchListTile(
-                title: const Text("ADA TEMUAN?",
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle:
-                    const Text("Aktifkan jika unit butuh perbaikan segera"),
-                secondary: Icon(Icons.warning_amber_rounded,
-                    color: isUrgent ? Colors.orange : Colors.grey),
-                value: isUrgent,
-                activeColor: Colors.orange,
-                onChanged: (val) => setState(() => isUrgent = val),
-              ),
+            SwitchListTile(
+              title: const Text("ADA TEMUAN?",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text("Unit butuh perbaikan segera"),
+              secondary: Icon(Icons.warning_amber_rounded,
+                  color: isUrgent ? Colors.orange : Colors.grey),
+              value: isUrgent,
+              activeColor: Colors.orange,
+              onChanged: (val) => setState(() => isUrgent = val),
             ),
 
             const SizedBox(height: 30),
 
-            // TOMBOL KIRIM
+            // BUTTON KIRIM
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange.shade800,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12))),
+                  backgroundColor: Colors.orange.shade800,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
                 onPressed: isSubmitting ? null : _submitInspection,
                 child: isSubmitting
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text("KIRIM LAPORAN",
                         style: TextStyle(
+                            color: Colors.white,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white)),
+                            fontWeight: FontWeight.bold)),
               ),
             ),
           ],

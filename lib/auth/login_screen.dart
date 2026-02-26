@@ -161,28 +161,40 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
-              const SizedBox(height: 50),
 
-              // SLOGAN BAWAH
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: Column(
-                  children: [
-                    Text("Utamakan Keselamatan, Tingkatkan Performamu,",
-                        style:
-                            TextStyle(fontSize: 10, color: Colors.grey[700])),
-                    const SizedBox(height: 4),
-                    Text("Jaga Unit Tetap Beroperasi",
-                        style:
-                            TextStyle(fontSize: 10, color: Colors.grey[700])),
-                  ],
-                ),
+              const SizedBox(height: 40), // Jarak ke footer identitas
+
+              // --- IDENTITAS APLIKASI (TMS) ---
+              const Text(
+                "TMS",
+                style: TextStyle(
+                    fontSize: 24,
+                    // FontWeight.black DIGANTI JADI FontWeight.w900
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFFF8C00),
+                    letterSpacing: 3),
               ),
+              const Text(
+                "- Tyre Monitoring System -",
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey,
+                    fontStyle: FontStyle.italic),
+              ),
+
+              const SizedBox(height: 8),
+
+              // --- VERSI TETAP ADA ---
+              const Text(
+                "Version 1.0.0",
+                style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500),
+              ),
+
+              const SizedBox(height: 30),
             ],
           ),
         ),

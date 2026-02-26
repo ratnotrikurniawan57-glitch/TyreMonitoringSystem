@@ -1,7 +1,6 @@
 name: tyre_ms
 description: "A new Flutter project."
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -12,7 +11,6 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
   firebase_core: ^3.4.0
-  # Library Kamera & Folder (Minggu 3)
   image_picker: ^1.0.7
   path_provider: ^2.1.2
   shared_preferences: ^2.2.3
@@ -25,8 +23,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
 
+# KONFIGURASI ICON (Simple Mode - Biar gak kegedean)
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/icon_tms.png"
+  min_sdk_android: 21
+
+# KONFIGURASI FLUTTER (Wajib mentok kiri)
 flutter:
   uses-material-design: true
+
   assets:
     - assets/images/logo_tms.png
+    - assets/images/icon_tms.png
