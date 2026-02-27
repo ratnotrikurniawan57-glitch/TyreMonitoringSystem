@@ -1,3 +1,4 @@
+// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -5,9 +6,14 @@ import 'package:intl/intl.dart';
 class FormInspectionScreen extends StatefulWidget {
   final String unitCode;
   final String unitId;
+  final bool isAccurate; // <--- TAMBAHIN INI
 
-  const FormInspectionScreen(
-      {super.key, required this.unitCode, required this.unitId});
+  const FormInspectionScreen({
+    super.key,
+    required this.unitCode,
+    required this.unitId,
+    required this.isAccurate, // <--- TAMBAHIN DI KONSTRUKTOR
+  });
 
   @override
   State<FormInspectionScreen> createState() => _FormInspectionScreenState();
@@ -52,8 +58,6 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
       debugPrint("Gagal ambil user: $e");
     }
   }
-
-  // --- FUNGSI NOTIFIKASI DIHAPUS DARI SINI (PINDAH KE CLOUD FUNCTIONS) ---
 
   Future<void> _selectTime(BuildContext context) async {
     final TimeOfDay? picked = await showTimePicker(
@@ -110,7 +114,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
         'condition': isUrgent ? 'temuan' : 'aman',
         'finding_desc': _descController.text.trim(),
         'team_nrp': teamNrps,
-        'is_accurate': true, // Target KPI Accuracy 100%
+        'is_accurate': widget.isAccurate, // <--- PAKE VARIABLE DARI KONSTRUKTOR
       });
 
       // 2. Update Status Unit di Koleksi Master

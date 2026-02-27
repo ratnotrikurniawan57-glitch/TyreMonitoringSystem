@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../features/form_inspection_screen.dart';
+import 'package:flutter/foundation.dart'; // <--- Wajib buat kDebugMode
 
 class TyremanTab extends StatefulWidget {
   const TyremanTab({super.key});
@@ -35,39 +36,108 @@ class _TyremanTabState extends State<TyremanTab>
     super.dispose();
   }
 
-  void _showCloseFindingDialog(String unitId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Konfirmasi Perbaikan"),
-        content: Text(
-            "Apakah unit ${unitId.toUpperCase()} sudah selesai diperbaiki dan siap operasi?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("BATAL")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('units')
-                  .doc(unitId)
-                  .update({
-                'condition': 'aman',
-                'last_action_by': _currentNRP,
-                'updated_at': FieldValue.serverTimestamp(),
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(
-                      "✅ Unit $unitId: Perbaikan Selesai oleh $_currentNRP")));
-            },
-            child: const Text("YA, SELESAI",
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+  Future<void> _showCloseFindingDialog(String unitId) async {
+    try {
+      // 1. Ambil data temuan terakhir dari Firestore
+      var inspectionSnapshot = await FirebaseFirestore.instance
+          .collection('inspections')
+          .where('unit_code', isEqualTo: unitId)
+          .where('condition', isEqualTo: 'temuan')
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get();
+
+      String temuanDesc = "Memuat data temuan...";
+      String fotoUrl = "";
+
+      if (inspectionSnapshot.docs.isNotEmpty) {
+        var data = inspectionSnapshot.docs.first.data();
+        // 🔥 FIX: Pake 'finding_desc' sesuai data Firestore terbaru
+        temuanDesc = data['finding_desc'] ?? "Tidak ada deskripsi";
+        fotoUrl = data['photo_url'] ?? "";
+      } else {
+        temuanDesc = "Data temuan tidak ditemukan di history.";
+      }
+
+      // 2. Tampilkan Dialog dengan detail temuan
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Konfirmasi Perbaikan - ${unitId.toUpperCase()}"),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Temuan Sebelumnya:",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.yellow[100],
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Text(
+                      temuanDesc,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.red[900]),
+                    ),
+                  ),
+                  if (fotoUrl.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Image.network(fotoUrl,
+                        height: 100, width: 100, fit: BoxFit.cover),
+                  ],
+                  const SizedBox(height: 15),
+                  const Text(
+                      "Apakah unit sudah selesai diperbaiki dan siap operasi?"),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("BATAL")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                onPressed: () async {
+                  // Update status unit jadi 'aman'
+                  await FirebaseFirestore.instance
+                      .collection('units')
+                      .doc(unitId)
+                      .update({
+                    'condition': 'aman',
+                    'last_action_by': _currentNRP,
+                    'updated_at': FieldValue.serverTimestamp(),
+                  });
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(
+                            "✅ Unit $unitId: Perbaikan Selesai oleh $_currentNRP")));
+                  }
+                },
+                child: const Text("YA, SELESAI",
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error Firestore: $e");
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("❌ Koneksi Firestore Gagal: $e")),
+        );
+      }
+    }
   }
 
   @override
@@ -80,22 +150,22 @@ class _TyremanTabState extends State<TyremanTab>
     return Scaffold(
       body: Column(
         children: [
-          // Search Bar
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(8.0), // Padding kecilin
             child: TextField(
               decoration: InputDecoration(
                 hintText: "Cari Kode Unit...",
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, size: 20),
                 isDense: true,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onChanged: (val) =>
                   setState(() => searchQuery = val.toLowerCase()),
             ),
           ),
-
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream:
@@ -114,21 +184,19 @@ class _TyremanTabState extends State<TyremanTab>
                       int group = data['plan_group'] ?? 1;
                       int target = data['kpi_target'] ?? 10;
 
-                      // LOGIKA WARNA SAKTI
-                      String status = 'white'; // Default
+                      String status = 'white';
 
                       if (condition != 'aman') {
-                        status = 'yellow_blink'; // Prioritas 1: Rusak/Temuan
+                        status = 'yellow_blink';
                       } else {
-                        // Cek apakah jadwalnya hari ini
                         bool isJadwal = (target == 10)
                             ? (group == groupProdHariIni)
                             : (group == hariIni);
 
                         if (isJadwal && lastCheck != tglIni) {
-                          status = 'red'; // Prioritas 2: Jadwal Cek & Belum Cek
+                          status = 'red';
                         } else if (lastCheck == tglIni) {
-                          status = 'green'; // Prioritas 3: Sudah Cek Hari Ini
+                          status = 'green';
                         }
                       }
 
@@ -138,7 +206,6 @@ class _TyremanTabState extends State<TyremanTab>
                         (item) => item['id'].toString().contains(searchQuery))
                     .toList();
 
-                // SORTING
                 docs.sort((a, b) {
                   Map<String, int> priority = {
                     'yellow_blink': 1,
@@ -153,11 +220,13 @@ class _TyremanTabState extends State<TyremanTab>
                 });
 
                 return GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  padding: const EdgeInsets.all(4), // Spacing pinggir kecilin
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    // 🔥 FIX: Kolom jadi 6 biar kecil & rapi
                     crossAxisCount: 4,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
+                    // 🔥 FIX: Jarak antar kotak jadi 2
+                    mainAxisSpacing: 2,
+                    crossAxisSpacing: 2,
                   ),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
@@ -165,37 +234,52 @@ class _TyremanTabState extends State<TyremanTab>
                     String status = item['status'] as String;
                     String id = item['id'] as String;
 
-                    return InkWell(
-                      onTap: () {
-                        if (status == 'yellow_blink') {
-                          _showCloseFindingDialog(id);
-                        } else {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (c) => FormInspectionScreen(
-                                        unitId: id,
-                                        unitCode: id,
-                                      )));
+                    return AnimatedBuilder(
+                      animation: _blinkController,
+                      builder: (context, child) {
+                        Color bgColor = Colors.white;
+                        if (status == 'red') bgColor = Colors.red;
+                        if (status == 'green') {
+                          bgColor = const Color.fromARGB(255, 28, 34, 28);
                         }
-                      },
-                      child: AnimatedBuilder(
-                        animation: _blinkController,
-                        builder: (context, child) {
-                          Color bgColor = Colors.white;
-                          if (status == 'red') bgColor = Colors.red;
-                          if (status == 'green') bgColor = Colors.green;
-                          if (status == 'yellow_blink') {
-                            bgColor = Color.lerp(
-                                Colors.yellow.shade700,
-                                Colors.orange.shade900,
-                                _blinkController.value)!;
-                          }
+                        if (status == 'yellow_blink') {
+                          bgColor = Color.lerp(
+                            Colors.yellow.shade700,
+                            Colors.orange.shade900,
+                            _blinkController.value,
+                          )!;
+                        }
 
-                          return Container(
+                        return InkWell(
+                          onTap: () {
+                            if (status == 'yellow_blink') {
+                              _showCloseFindingDialog(id);
+                            } else {
+                              var data = item['data'] as Map<String, dynamic>;
+                              int target = data['kpi_target'] ?? 10;
+                              int group = data['plan_group'] ?? 1;
+
+                              bool isJadwal = (target == 10)
+                                  ? (group == groupProdHariIni)
+                                  : (group == hariIni);
+
+                              bool isAccurate = (isJadwal && status == 'red');
+
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (c) => FormInspectionScreen(
+                                            unitId: id,
+                                            unitCode: id,
+                                            isAccurate: isAccurate,
+                                          )));
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
                             decoration: BoxDecoration(
                               color: bgColor,
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: Colors.grey.shade300),
                             ),
                             child: Center(
@@ -206,14 +290,15 @@ class _TyremanTabState extends State<TyremanTab>
                                       ? Colors.white
                                       : Colors.black,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 10,
+                                  // 🔥 FIX: Font size jadi 8 buat kotak kecil
+                                  fontSize: 14,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );

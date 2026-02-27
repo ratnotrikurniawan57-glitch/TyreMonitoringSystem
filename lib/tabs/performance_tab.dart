@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_types_as_parameter_names, use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -12,13 +13,16 @@ class PerformanceTab extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
+      // 🔥 APPBAR SUDAH DIHAPUS TOTAL DI SINI
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- BAGIAN 1: RINGKASAN STATUS ---
+            // 🔥 TAMBAHKAN SPACER BIAR GAK KETUTUP STATUS BAR HP
+            const SizedBox(height: 5),
             const Padding(
-              padding: EdgeInsets.fromLTRB(16, 20, 16, 10),
+              padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Text("MONITORING KONDISI UNIT",
                   style: TextStyle(
                       fontSize: 14,
@@ -40,7 +44,7 @@ class PerformanceTab extends StatelessWidget {
 
             const Divider(thickness: 1, height: 40),
 
-            // --- BAGIAN 3: LEADERBOARD TYREMAN ---
+            // --- BAGIAN 3: LEADERBOARD ---
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Row(
@@ -60,12 +64,16 @@ class PerformanceTab extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ); // 🔥 KURUNG TUTUP SCAFFOLD DI SINI (DULU ERROR DI SINI)
   }
+
+  // ... (Fungsi _buildOverallStatus, _statusMiniBox, _buildUnitStatsGrid, _buildSmallProgress, _buildTyremanLeaderboard tetap sama)
 
   Widget _buildOverallStatus() {
     String tglIni = DateFormat('yyyy-MM-dd').format(DateTime.now());
     int weekdayIni = DateTime.now().weekday;
+    int dayOfMonth = DateTime.now().day;
+    int grupAktif = (dayOfMonth % 3 == 0) ? 3 : (dayOfMonth % 3);
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('units').snapshots(),
@@ -91,9 +99,7 @@ class PerformanceTab extends StatelessWidget {
 
           bool isJadwal = false;
           if (target == 10) {
-            int day = DateTime.now().day;
-            int grupSekarang = (day % 3 == 0) ? 3 : (day % 3);
-            isJadwal = (group == grupSekarang);
+            isJadwal = (group == grupAktif);
           } else {
             isJadwal = (group == weekdayIni);
           }
@@ -104,12 +110,12 @@ class PerformanceTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12.0),
           child: Row(
             children: [
-              _statusMiniBox("AMAN (HARI INI)", aman, Colors.green,
-                  Icons.check_circle_outline),
-              _statusMiniBox("TEMUAN AKTIF", temuan, Colors.orange,
-                  Icons.warning_amber_rounded),
               _statusMiniBox(
-                  "BELUM DICEK", overdue, Colors.red, Icons.timer_outlined),
+                  "AMAN", aman, Colors.green, Icons.check_circle_outline),
+              _statusMiniBox(
+                  "TEMUAN", temuan, Colors.orange, Icons.warning_amber_rounded),
+              _statusMiniBox(
+                  "OVERDUE", overdue, Colors.red, Icons.timer_outlined),
             ],
           ),
         );
@@ -129,15 +135,18 @@ class PerformanceTab extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Icon(icon, color: color, size: 16),
+            Icon(icon, color: color, size: 20),
             const SizedBox(height: 5),
             Text("$count",
                 style: TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+                    // 🔥 ANGKA STATUS GEDEIN
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: color)),
             Text(label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 8, fontWeight: FontWeight.bold, color: color)),
+                    fontSize: 10, fontWeight: FontWeight.bold, color: color)),
           ],
         ),
       ),
@@ -146,124 +155,136 @@ class PerformanceTab extends StatelessWidget {
 
   Widget _buildUnitStatsGrid(String monthYear) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('units').snapshots(),
-      builder: (context, unitSnapshot) {
-        if (!unitSnapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        stream: FirebaseFirestore.instance.collection('units').snapshots(),
+        builder: (context, unitSnapshot) {
+          if (!unitSnapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-        return StreamBuilder<QuerySnapshot>(
-          stream:
-              FirebaseFirestore.instance.collection('inspections').snapshots(),
-          builder: (context, insSnapshot) {
-            if (!insSnapshot.hasData) return const SizedBox();
+          return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('inspections')
+                  .snapshots(),
+              builder: (context, insSnapshot) {
+                if (!insSnapshot.hasData) return const SizedBox();
 
-            // Filter Inspeksi berdasarkan Bulan
-            var monthIns = insSnapshot.data!.docs.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              if (data['timestamp'] == null) return false;
-              DateTime date = (data['timestamp'] as Timestamp).toDate();
-              return DateFormat('MM-yyyy').format(date) == monthYear;
-            }).toList();
-
-            // Grouping Unit berdasarkan Vehicle Desc
-            Map<String, List<Map<String, dynamic>>> unitGroups = {};
-            for (var doc in unitSnapshot.data!.docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              String desc = data['vehicle_desc'] ?? 'LAINNYA';
-              if (!unitGroups.containsKey(desc)) unitGroups[desc] = [];
-              unitGroups[desc]!.add(data);
-            }
-
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 0.7, // Ditinggiin dikit biar muat teks bawah
-              ),
-              itemCount: unitGroups.keys.length,
-              itemBuilder: (context, index) {
-                String className = unitGroups.keys.elementAt(index);
-                List<Map<String, dynamic>> unitsInClass =
-                    unitGroups[className]!;
-
-                // LOGIKA TARGET DISKUSI: DT/HD = 10x, Support/Lainnya = 4x
-                int targetPerUnit =
-                    (className.toUpperCase().contains('SUPPORT') ||
-                            className.toUpperCase().contains('GREADER') ||
-                            className.toUpperCase().contains('LOADER'))
-                        ? 4
-                        : 10;
-
-                int totalUnit = unitsInClass.length;
-                int totalTargetKPI = totalUnit * targetPerUnit;
-
-                // Hitung total form masuk untuk kelas ini
-                var codesInClass = unitsInClass
-                    .map((u) => u['unit_code']?.toString().toLowerCase() ?? "")
-                    .toSet();
-                var checkedInClass = monthIns.where((ins) {
-                  var insData = ins.data() as Map<String, dynamic>;
-                  return codesInClass
-                      .contains(insData['unit_code']?.toString().toLowerCase());
+                var monthIns = insSnapshot.data!.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  if (data['timestamp'] == null) return false;
+                  DateTime date = (data['timestamp'] as Timestamp).toDate();
+                  return DateFormat('MM-yyyy').format(date) == monthYear;
                 }).toList();
 
-                int totalFormMasuk = checkedInClass.length;
-                double qtyPercent = totalTargetKPI == 0
-                    ? 0
-                    : (totalFormMasuk / totalTargetKPI) * 100;
+                Map<String, List<Map<String, dynamic>>> unitGroups = {};
+                for (var doc in unitSnapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  String desc = data['vehicle_desc'] ?? 'LAINNYA';
+                  if (!unitGroups.containsKey(desc)) unitGroups[desc] = [];
+                  unitGroups[desc]!.add(data);
+                }
 
-                // Accuracy
-                int accurateCount = checkedInClass
-                    .where((ins) => (ins.data() as Map)['is_accurate'] == true)
-                    .length;
-                double accPercent = checkedInClass.isEmpty
-                    ? 0
-                    : (accurateCount / checkedInClass.length) * 100;
-
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.6, // Disesuaikan biar konten muat
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(className,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 8)),
-                      Text("Tot = $totalUnit",
-                          style:
-                              const TextStyle(fontSize: 8, color: Colors.grey)),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  itemCount: unitGroups.keys.length,
+                  itemBuilder: (context, index) {
+                    String className = unitGroups.keys.elementAt(index);
+                    List<Map<String, dynamic>> unitsInClass =
+                        unitGroups[className]!;
+
+                    int targetPerUnit =
+                        (className.toUpperCase().contains('DT') ||
+                                className.toUpperCase().contains('HD'))
+                            ? 10
+                            : 4;
+
+                    int totalPlanBulanan = unitsInClass.length * targetPerUnit;
+
+                    var codesInClass = unitsInClass
+                        .map((u) =>
+                            u['unit_code']?.toString().toLowerCase() ?? "")
+                        .toSet();
+
+                    var checkedInClass = monthIns.where((ins) {
+                      var insData = ins.data() as Map<String, dynamic>;
+                      return codesInClass.contains(
+                          insData['unit_code']?.toString().toLowerCase());
+                    }).toList();
+
+                    int totalInput = checkedInClass.length;
+                    double qtyPercent = totalPlanBulanan == 0
+                        ? 0
+                        : (totalInput / totalPlanBulanan) * 100;
+
+                    int totalTepatJadwal = checkedInClass.where((ins) {
+                      var data = ins.data() as Map<String, dynamic>;
+                      return data['is_accurate'] == true;
+                    }).length;
+
+                    double accPercent = totalPlanBulanan == 0
+                        ? 0
+                        : (totalTepatJadwal / totalPlanBulanan) * 100;
+
+                    bool isGood = qtyPercent >= 100 && accPercent >= 100;
+                    Color cardColor =
+                        isGood ? Colors.green.shade50 : Colors.red.shade50;
+                    IconData statusIcon = isGood
+                        ? Icons.sentiment_satisfied_alt
+                        : Icons.sentiment_dissatisfied;
+                    Color iconColor = isGood ? Colors.green : Colors.red;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _buildSmallProgress(qtyPercent.clamp(0, 100), "QTY",
-                              qtyPercent >= 100 ? Colors.green : Colors.orange),
-                          _buildSmallProgress(accPercent, "ACC",
-                              accPercent >= 100 ? Colors.blue : Colors.red),
+                          Icon(statusIcon, color: iconColor, size: 24),
+                          const SizedBox(height: 4),
+                          Text(className,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 10)),
+                          Text("Unit: ${unitsInClass.length}",
+                              style: const TextStyle(
+                                  fontSize: 9, color: Colors.grey)),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildSmallProgress(
+                                  qtyPercent.clamp(0, 100),
+                                  "QTY",
+                                  qtyPercent >= 100
+                                      ? Colors.green
+                                      : Colors.orange),
+                              _buildSmallProgress(
+                                  accPercent.clamp(0, 100),
+                                  "ACC",
+                                  accPercent >= 100 ? Colors.blue : Colors.red),
+                            ],
+                          ),
+                          const SizedBox(height: 5),
+                          Text("$totalInput / $totalPlanBulanan",
+                              style: const TextStyle(
+                                  fontSize: 10, fontWeight: FontWeight.bold)),
                         ],
                       ),
-                      const SizedBox(height: 5),
-                      Text("$totalFormMasuk / $totalTargetKPI",
-                          style: const TextStyle(
-                              fontSize: 9, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
+                    );
+                  },
                 );
-              },
-            );
-          },
-        );
-      },
-    );
+              });
+        });
   }
 
   Widget _buildSmallProgress(double value, String label, Color color) {
@@ -273,24 +294,29 @@ class PerformanceTab extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             SizedBox(
-              height: 28,
-              width: 28,
+              height: 35, // 🔥 Gedein Lingkaran
+              width: 35,
               child: CircularProgressIndicator(
                 value: value / 100,
-                strokeWidth: 3,
-                backgroundColor: Colors.grey[100],
+                strokeWidth: 4,
+                backgroundColor: Colors.grey[200],
                 color: color,
               ),
             ),
             Text("${value.toStringAsFixed(0)}%",
-                style:
-                    const TextStyle(fontSize: 7, fontWeight: FontWeight.bold)),
+                style: const TextStyle(
+                    // 🔥 Gedein Tulisan %
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 2),
         Text(label,
             style: TextStyle(
-                fontSize: 7, fontWeight: FontWeight.bold, color: color)),
+                // 🔥 Gedein Tulisan QTY/ACC
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+                color: color)),
       ],
     );
   }
@@ -304,13 +330,12 @@ class PerformanceTab extends StatelessWidget {
         var filtered = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['timestamp'] == null) return false;
-          return DateFormat('MM-yyyy')
-                  .format((data['timestamp'] as Timestamp).toDate()) ==
-              monthYear;
+          DateTime insDate = (data['timestamp'] as Timestamp).toDate();
+          return DateFormat('MM-yyyy').format(insDate) == monthYear;
         });
 
         for (var doc in filtered) {
-          List nrps = (doc.data() as Map)['team_nrp'] ?? [];
+          List nrps = (doc.data() as Map<String, dynamic>)['team_nrp'] ?? [];
           for (var nrp in nrps) {
             String n = nrp.toString().toLowerCase();
             points[n] = (points[n] ?? 0) + 1;
@@ -319,9 +344,10 @@ class PerformanceTab extends StatelessWidget {
         var sorted = points.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
 
+        var top5 = sorted.take(5).toList();
+
         return Column(
-          children: sorted.map((e) {
-            // Ambil top 5 aja biar gak kepanjangan
+          children: top5.map((e) {
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
                   .collection('users')
@@ -344,17 +370,22 @@ class PerformanceTab extends StatelessWidget {
                   child: ListTile(
                     dense: true,
                     leading: CircleAvatar(
-                        radius: 12,
+                        radius: 14, // 🔥 Gedein Avatar
                         backgroundColor: Colors.orange.shade50,
                         child: Text(name[0],
                             style: const TextStyle(
-                                fontSize: 10, color: Colors.orange))),
+                                fontSize: 12, color: Colors.orange))),
                     title: Text(name,
                         style: const TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.bold)),
+                            // 🔥 Gedein Nama
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold)),
                     trailing: Text("${e.value} Unit",
                         style: const TextStyle(
-                            color: Colors.orange, fontWeight: FontWeight.bold)),
+                            // 🔥 Gedein Jumlah Unit
+                            fontSize: 12,
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold)),
                   ),
                 );
               },

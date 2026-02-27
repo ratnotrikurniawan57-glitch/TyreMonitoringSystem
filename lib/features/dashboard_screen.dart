@@ -1,12 +1,11 @@
 // ignore_for_file: use_build_context_synchronously
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../auth/login_screen.dart';
 import '../tabs/admin_tab.dart';
 import '../tabs/tyreman_tab.dart';
 import '../tabs/history_tab.dart';
-import '../tabs/performance_tab.dart';
+import '../tabs/performance_tab.dart'; // <--- PASTIKAN IMPORT INI ADA
 
 class DashboardScreen extends StatefulWidget {
   final String nrpAktif;
@@ -52,7 +51,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // --- FUNGSI GANTI PASSWORD (MESIN YANG TADI HILANG) ---
+  // --- FUNGSI GANTI PASSWORD ---
   void _showChangePasswordDialog() {
     final TextEditingController newPassController = TextEditingController();
     showDialog(
@@ -100,7 +99,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     // List halaman sesuai Tab
     final List<Widget> pages = [
-      const PerformanceTab(),
+      const PerformanceTab(), // <--- PASTI CLASS INI ADA DI performance_tab.dart
       const TyremanTab(),
       const HistoryTab(),
       if (isAdmin) const AdminTab(),
@@ -118,7 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.lock_reset),
             tooltip: "Ganti Password",
-            onPressed: _showChangePasswordDialog, // Sekarang pasti kenal!
+            onPressed: _showChangePasswordDialog,
           ),
           // 2. IKON LOGOUT
           IconButton(
