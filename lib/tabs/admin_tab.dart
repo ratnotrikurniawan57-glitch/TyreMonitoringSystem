@@ -1,4 +1,5 @@
-// ignore_for_file: use_build_context_synchronously, avoid_types_as_parameter_names
+// ignore_for_file: use_build_context_synchronously, avoid_types_as_parameter_names, deprecated_member_use
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../model/unit_model.dart';
@@ -13,25 +14,18 @@ class AdminTab extends StatefulWidget {
 
 class _AdminTabState extends State<AdminTab> {
   String _filterPeriode = "1";
-  String _searchText = ""; // Variabel untuk Search
-  final TextEditingController _searchController =
-      TextEditingController(); // Controller Search
+  String _searchText = ""; 
+  final TextEditingController _searchController = TextEditingController(); 
 
   final List<String> _namaHari = [
-    "",
-    "Senin",
-    "Selasa",
-    "Rabu",
-    "Kamis",
-    "Jumat",
-    "Sabtu",
-    "Minggu"
+    "", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"
   ];
 
   void _quickEditPlan(String docId, int currentPlan, int target) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: Text("OPSI UNIT: ${docId.toUpperCase()}"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -48,12 +42,8 @@ class _AdminTabState extends State<AdminTab> {
                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: currentPlan == num
-                            ? Colors.blue
-                            : Colors.grey.shade300,
-                        foregroundColor:
-                            currentPlan == num ? Colors.white : Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        backgroundColor: currentPlan == num ? Colors.blue : Colors.grey.shade300,
+                        foregroundColor: currentPlan == num ? Colors.white : Colors.black,
                       ),
                       onPressed: () async {
                         await FirebaseFirestore.instance
@@ -62,9 +52,7 @@ class _AdminTabState extends State<AdminTab> {
                             .update({'plan_group': num});
                         Navigator.pop(context);
                       },
-                      child: Text(target == 4
-                          ? _namaHari[num].substring(0, 3)
-                          : "$num"),
+                      child: Text(target == 4 ? _namaHari[num].substring(0, 3) : "$num"),
                     ),
                   );
                 }).toList(),
@@ -74,8 +62,7 @@ class _AdminTabState extends State<AdminTab> {
             const Divider(),
             TextButton.icon(
               icon: const Icon(Icons.delete_forever, color: Colors.red),
-              label: const Text("HAPUS UNIT INI",
-                  style: TextStyle(color: Colors.red)),
+              label: const Text("HAPUS UNIT INI", style: TextStyle(color: Colors.red)),
               onPressed: () => _confirmDeleteUnit(docId),
             ),
           ],
@@ -91,19 +78,14 @@ class _AdminTabState extends State<AdminTab> {
         title: const Text("Konfirmasi"),
         content: Text("Yakin mau hapus unit ${docId.toUpperCase()}?"),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(c), child: const Text("BATAL")),
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text("BATAL")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('units')
-                  .doc(docId)
-                  .delete();
+              await FirebaseFirestore.instance.collection('units').doc(docId).delete();
               Navigator.pop(c);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("🗑️ Unit Berhasil Dihapus!")));
+              if (mounted) Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("🗑️ Unit Berhasil Dihapus!")));
             },
             child: const Text("HAPUS", style: TextStyle(color: Colors.white)),
           ),
@@ -122,22 +104,16 @@ class _AdminTabState extends State<AdminTab> {
             child: Row(
               children: [
                 _menuBtn("MANAGE\nUSER", Icons.group_add, Colors.blue, () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (c) => const ManageUserScreen()));
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => const ManageUserScreen()));
                 }),
                 const SizedBox(width: 10),
-                _menuBtn("TAMBAH\nUNIT", Icons.add_box, Colors.green,
-                    () => _showAddUnitDialog(context)),
+                _menuBtn("TAMBAH\nUNIT", Icons.add_box, Colors.green, () => _showAddUnitDialog(context)),
                 const SizedBox(width: 10),
-                _menuBtn("SYNC MASTER\nUNIT DATA", Icons.cloud_download,
-                    Colors.purple, _importMassal),
+                _menuBtn("SYNC MASTER\nUNIT DATA", Icons.cloud_download, Colors.purple, _importMassal),
               ],
             ),
           ),
 
-          // BARU: Kotak Search Unit
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
             child: TextField(
@@ -153,19 +129,15 @@ class _AdminTabState extends State<AdminTab> {
                           setState(() => _searchText = "");
                         })
                     : null,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
-              onChanged: (val) {
-                setState(() => _searchText = val.toLowerCase());
-              },
+              onChanged: (val) => setState(() => _searchText = val.toLowerCase()),
             ),
           ),
 
           const Divider(thickness: 2),
 
-          // Filter Group & Hari (Scrollable ke samping)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -179,60 +151,44 @@ class _AdminTabState extends State<AdminTab> {
                 const SizedBox(width: 10),
                 Container(width: 1, height: 30, color: Colors.grey.shade400),
                 const SizedBox(width: 10),
-                // Gunakan awalan H agar tidak tabrakan dengan G1-G3
                 ...[1, 2, 3, 4, 5, 6, 7].map((h) => Padding(
-                      padding: const EdgeInsets.only(right: 5),
-                      child: _buildFilterButton(
-                          _namaHari[h].substring(0, 3), "H$h"),
-                    )),
+                  padding: const EdgeInsets.only(right: 5),
+                  child: _buildFilterButton(_namaHari[h].substring(0, 3), "H$h"),
+                )),
               ],
             ),
           ),
           const SizedBox(height: 10),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  FirebaseFirestore.instance.collection('units').snapshots(),
+              stream: FirebaseFirestore.instance.collection('units').snapshots(),
               builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
-                // REVISI: Logika filtering gabungan Search & H1-H7
                 var docs = snap.data!.docs.where((d) {
                   var data = d.data() as Map<String, dynamic>;
                   String id = d.id.toLowerCase();
                   String p = data['plan_group'].toString();
                   int target = data['kpi_target'] ?? 10;
 
-                  // 1. Cek Search
                   bool matchesSearch = id.contains(_searchText);
-
-                  // 2. Cek Filter Group/Hari
                   bool matchesFilter = false;
                   if (_filterPeriode.startsWith("H")) {
-                    // Logic untuk Support (target 4x)
                     String hariAngka = _filterPeriode.substring(1);
                     matchesFilter = (target == 4 && p == hariAngka);
                   } else {
-                    // Logic untuk Produksi (target 10x)
                     matchesFilter = (target == 10 && p == _filterPeriode);
                   }
-
                   return matchesSearch && matchesFilter;
                 }).toList();
 
                 docs.sort((a, b) => (a.id).compareTo(b.id));
-                if (docs.isEmpty) {
-                  return const Center(child: Text("Data tidak ditemukan"));
-                }
+                if (docs.isEmpty) return const Center(child: Text("Data tidak ditemukan"));
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(15),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
+                    crossAxisCount: 4, mainAxisSpacing: 8, crossAxisSpacing: 8,
                   ),
                   itemCount: docs.length,
                   itemBuilder: (context, i) {
@@ -251,16 +207,10 @@ class _AdminTabState extends State<AdminTab> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(id.toUpperCase(),
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 10)),
+                            Text(id.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
                             const SizedBox(height: 4),
                             Text(target == 4 ? "SUP" : "PROD",
-                                style: TextStyle(
-                                    fontSize: 8,
-                                    color: target == 4
-                                        ? Colors.orange
-                                        : Colors.green)),
+                                style: TextStyle(fontSize: 8, color: target == 4 ? Colors.orange : Colors.green)),
                           ],
                         ),
                       ),
@@ -284,21 +234,14 @@ class _AdminTabState extends State<AdminTab> {
         foregroundColor: isActive ? Colors.white : Colors.black,
       ),
       onPressed: () => setState(() => _filterPeriode = value),
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
     );
   }
 
   Future<void> _importMassal() async {
-    showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (c) => const Center(child: CircularProgressIndicator()));
+    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
     for (var item in UnitModel.masterDataList) {
-      await FirebaseFirestore.instance
-          .collection('units')
-          .doc(item['code'].toString().toLowerCase())
-          .set({
+      await FirebaseFirestore.instance.collection('units').doc(item['code'].toString().toLowerCase()).set({
         'unit_code': item['code'].toString().toLowerCase(),
         'brand': item['brand'].toString().toUpperCase(),
         'vehicle_desc': item['desc'].toString().toUpperCase(),
@@ -309,8 +252,7 @@ class _AdminTabState extends State<AdminTab> {
       });
     }
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Sukses Sync 147 Unit dengan Target!")));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ Sukses Sync 147 Unit dengan Target!")));
   }
 
   void _showAddUnitDialog(BuildContext context) {
@@ -329,62 +271,38 @@ class _AdminTabState extends State<AdminTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                    controller: unitController,
-                    decoration: const InputDecoration(labelText: "Kode Unit")),
-                _buildDynamicDropdown("brands", "Brand", selectedBrand,
-                    (val) => setDialogState(() => selectedBrand = val)),
-                _buildDynamicDropdown("descriptions", "Desc", selectedDesc,
-                    (val) => setDialogState(() => selectedDesc = val)),
+                TextField(controller: unitController, decoration: const InputDecoration(labelText: "Kode Unit")),
+                _buildDynamicDropdown("brands", "Brand", selectedBrand, (val) => setDialogState(() => selectedBrand = val)),
+                _buildDynamicDropdown("descriptions", "Desc", selectedDesc, (val) => setDialogState(() => selectedDesc = val)),
                 const SizedBox(height: 15),
                 const Text("Target Check:"),
                 Row(
                   children: [
-                    Expanded(
-                        child: ChoiceChip(
-                            label: const Text("10x (Prod)"),
-                            selected: selectedTarget == 10,
-                            onSelected: (s) =>
-                                setDialogState(() => selectedTarget = 10))),
+                    Expanded(child: ChoiceChip(label: const Text("10x (Prod)"), selected: selectedTarget == 10, onSelected: (s) => setDialogState(() => selectedTarget = 10))),
                     const SizedBox(width: 10),
-                    Expanded(
-                        child: ChoiceChip(
-                            label: const Text("4x (Supp)"),
-                            selected: selectedTarget == 4,
-                            onSelected: (s) =>
-                                setDialogState(() => selectedTarget = 4))),
+                    Expanded(child: ChoiceChip(label: const Text("4x (Supp)"), selected: selectedTarget == 4, onSelected: (s) => setDialogState(() => selectedTarget = 4))),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Text(selectedTarget == 10 ? "Pilih Group:" : "Pilih Hari:"),
                 Wrap(
                   spacing: 5,
-                  children:
-                      (selectedTarget == 10 ? [1, 2, 3] : [1, 2, 3, 4, 5, 6, 7])
-                          .map((n) => ChoiceChip(
-                                label: Text(selectedTarget == 10
-                                    ? "G$n"
-                                    : _namaHari[n].substring(0, 3)),
-                                selected: selectedPlan == n,
-                                onSelected: (s) =>
-                                    setDialogState(() => selectedPlan = n),
-                              ))
-                          .toList(),
+                  children: (selectedTarget == 10 ? [1, 2, 3] : [1, 2, 3, 4, 5, 6, 7])
+                      .map((n) => ChoiceChip(
+                            label: Text(selectedTarget == 10 ? "G$n" : _namaHari[n].substring(0, 3)),
+                            selected: selectedPlan == n,
+                            onSelected: (s) => setDialogState(() => selectedPlan = n),
+                          )).toList(),
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("BATAL")),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
             ElevatedButton(
               onPressed: () async {
                 if (unitController.text.isNotEmpty) {
-                  await FirebaseFirestore.instance
-                      .collection('units')
-                      .doc(unitController.text.trim().toLowerCase())
-                      .set({
+                  await FirebaseFirestore.instance.collection('units').doc(unitController.text.trim().toLowerCase()).set({
                     'unit_code': unitController.text.trim().toLowerCase(),
                     'brand': selectedBrand ?? "UNKNOWN",
                     'vehicle_desc': selectedDesc ?? "UNKNOWN",
@@ -404,13 +322,9 @@ class _AdminTabState extends State<AdminTab> {
     );
   }
 
-  Widget _buildDynamicDropdown(
-      String coll, String label, String? current, Function(String?) onChanged) {
+  Widget _buildDynamicDropdown(String coll, String label, String? current, Function(String?) onChanged) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('settings')
-          .doc(coll)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('settings').doc(coll).snapshots(),
       builder: (context, snap) {
         List<String> items = [];
         if (snap.hasData && snap.data!.exists) {
@@ -420,11 +334,9 @@ class _AdminTabState extends State<AdminTab> {
           children: [
             Expanded(
                 child: DropdownButtonFormField<String>(
-                    value: current,
+                    value: current, // Gunakan 'value', bukan 'initialValue'
                     decoration: InputDecoration(labelText: label),
-                    items: items
-                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                        .toList(),
+                    items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                     onChanged: onChanged)),
             IconButton(
                 icon: const Icon(Icons.add_circle, color: Colors.green),
@@ -441,21 +353,13 @@ class _AdminTabState extends State<AdminTab> {
         context: context,
         builder: (context) => AlertDialog(
               title: Text("Tambah ${coll.toUpperCase()}"),
-              content: TextField(
-                  controller: controller,
-                  decoration: const InputDecoration(hintText: "Nama...")),
+              content: TextField(controller: controller, decoration: const InputDecoration(hintText: "Nama...")),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("BATAL")),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text("BATAL")),
                 ElevatedButton(
                     onPressed: () async {
-                      await FirebaseFirestore.instance
-                          .collection('settings')
-                          .doc(coll)
-                          .set({
-                        'list': FieldValue.arrayUnion(
-                            [controller.text.trim().toUpperCase()])
+                      await FirebaseFirestore.instance.collection('settings').doc(coll).set({
+                        'list': FieldValue.arrayUnion([controller.text.trim().toUpperCase()])
                       }, SetOptions(merge: true));
                       Navigator.pop(context);
                     },
@@ -471,16 +375,14 @@ class _AdminTabState extends State<AdminTab> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                  color: c.withOpacity(0.1),
+                  color: c.withValues(alpha: 0.1), // Fix: Pakai warna buttonnya bukan biru terus
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: c)),
               child: Column(children: [
                 Icon(i, color: c),
                 const SizedBox(height: 5),
-                Text(t,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: c, fontSize: 8, fontWeight: FontWeight.bold))
+                Text(t, textAlign: TextAlign.center,
+                    style: TextStyle(color: c, fontSize: 8, fontWeight: FontWeight.bold))
               ]),
             )));
   }

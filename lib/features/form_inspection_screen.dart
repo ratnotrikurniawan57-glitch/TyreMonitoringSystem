@@ -261,7 +261,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
               decoration: InputDecoration(
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12))),
-              value: selectedLocation,
+              initialValue: selectedLocation,
               items: locations
                   .map((l) => DropdownMenuItem(value: l, child: Text(l)))
                   .toList(),
@@ -290,7 +290,7 @@ class _FormInspectionScreenState extends State<FormInspectionScreen> {
               secondary: Icon(Icons.warning_amber_rounded,
                   color: isUrgent ? Colors.orange : Colors.grey),
               value: isUrgent,
-              activeColor: Colors.orange,
+              activeThumbColor: Colors.orange,
               onChanged: (val) => setState(() => isUrgent = val),
             ),
             const SizedBox(height: 30),

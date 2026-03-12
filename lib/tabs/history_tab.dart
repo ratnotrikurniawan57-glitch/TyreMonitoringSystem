@@ -246,6 +246,7 @@ class _HistoryTabState extends State<HistoryTab> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
+            // ignore: deprecated_member_use
             color: Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.white24)),

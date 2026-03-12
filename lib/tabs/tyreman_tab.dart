@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../features/form_inspection_screen.dart';
-import 'package:flutter/foundation.dart'; // <--- Wajib buat kDebugMode
+import 'package:flutter/foundation.dart';
 
 class TyremanTab extends StatefulWidget {
   const TyremanTab({super.key});
@@ -38,7 +38,6 @@ class _TyremanTabState extends State<TyremanTab>
 
   Future<void> _showCloseFindingDialog(String unitId) async {
     try {
-      // 1. Ambil data temuan terakhir dari Firestore
       var inspectionSnapshot = await FirebaseFirestore.instance
           .collection('inspections')
           .where('unit_code', isEqualTo: unitId)
@@ -52,14 +51,12 @@ class _TyremanTabState extends State<TyremanTab>
 
       if (inspectionSnapshot.docs.isNotEmpty) {
         var data = inspectionSnapshot.docs.first.data();
-        // 🔥 FIX: Pake 'finding_desc' sesuai data Firestore terbaru
         temuanDesc = data['finding_desc'] ?? "Tidak ada deskripsi";
         fotoUrl = data['photo_url'] ?? "";
       } else {
         temuanDesc = "Data temuan tidak ditemukan di history.";
       }
 
-      // 2. Tampilkan Dialog dengan detail temuan
       showDialog(
         context: context,
         builder: (BuildContext context) {
@@ -89,12 +86,14 @@ class _TyremanTabState extends State<TyremanTab>
                   ),
                   if (fotoUrl.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    Image.network(fotoUrl,
-                        height: 100, width: 100, fit: BoxFit.cover),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(fotoUrl,
+                          height: 150, width: double.infinity, fit: BoxFit.cover),
+                    ),
                   ],
                   const SizedBox(height: 15),
-                  const Text(
-                      "Apakah unit sudah selesai diperbaiki dan siap operasi?"),
+                  const Text("Apakah unit sudah selesai diperbaiki?"),
                 ],
               ),
             ),
@@ -105,7 +104,6 @@ class _TyremanTabState extends State<TyremanTab>
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 onPressed: () async {
-                  // Update status unit jadi 'aman'
                   await FirebaseFirestore.instance
                       .collection('units')
                       .doc(unitId)
@@ -117,8 +115,7 @@ class _TyremanTabState extends State<TyremanTab>
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(
-                            "✅ Unit $unitId: Perbaikan Selesai oleh $_currentNRP")));
+                        content: Text("✅ Unit $unitId: Perbaikan Selesai")));
                   }
                 },
                 child: const Text("YA, SELESAI",
@@ -129,14 +126,7 @@ class _TyremanTabState extends State<TyremanTab>
         },
       );
     } catch (e) {
-      if (kDebugMode) {
-        print("Error Firestore: $e");
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Koneksi Firestore Gagal: $e")),
-        );
-      }
+      if (kDebugMode) print("Error Firestore: $e");
     }
   }
 
@@ -151,7 +141,7 @@ class _TyremanTabState extends State<TyremanTab>
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(8.0), // Padding kecilin
+            padding: const EdgeInsets.all(8.0),
             child: TextField(
               decoration: InputDecoration(
                 hintText: "Cari Kode Unit...",
@@ -168,43 +158,38 @@ class _TyremanTabState extends State<TyremanTab>
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  FirebaseFirestore.instance.collection('units').snapshots(),
+              stream: FirebaseFirestore.instance.collection('units').snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                var docs = snapshot.data!.docs
-                    .map((doc) {
-                      var data = doc.data() as Map<String, dynamic>;
-                      String id = doc.id;
-                      String condition = data['condition'] ?? 'aman';
-                      String? lastCheck = data['last_check'];
-                      int group = data['plan_group'] ?? 1;
-                      int target = data['kpi_target'] ?? 10;
+                var docs = snapshot.data!.docs.map((doc) {
+                  var data = doc.data() as Map<String, dynamic>;
+                  String id = doc.id;
+                  String condition = data['condition'] ?? 'aman';
+                  String? lastCheck = data['last_check'];
+                  int group = data['plan_group'] ?? 1;
+                  int target = data['kpi_target'] ?? 10;
 
-                      String status = 'white';
+                  String status = 'white';
+                  if (condition != 'aman') {
+                    status = 'yellow_blink';
+                  } else {
+                    bool isJadwal = (target == 10)
+                        ? (group == groupProdHariIni)
+                        : (group == hariIni);
 
-                      if (condition != 'aman') {
-                        status = 'yellow_blink';
-                      } else {
-                        bool isJadwal = (target == 10)
-                            ? (group == groupProdHariIni)
-                            : (group == hariIni);
-
-                        if (isJadwal && lastCheck != tglIni) {
-                          status = 'red';
-                        } else if (lastCheck == tglIni) {
-                          status = 'green';
-                        }
-                      }
-
-                      return {'data': data, 'status': status, 'id': id};
-                    })
-                    .where(
-                        (item) => item['id'].toString().contains(searchQuery))
-                    .toList();
+                    if (isJadwal && lastCheck != tglIni) {
+                      status = 'red';
+                    } else if (lastCheck == tglIni) {
+                      status = 'green';
+                    }
+                  }
+                  return {'data': data, 'status': status, 'id': id};
+                }).where((item) =>
+                    item['id'].toString().toLowerCase().contains(searchQuery))
+                .toList();
 
                 docs.sort((a, b) {
                   Map<String, int> priority = {
@@ -220,34 +205,36 @@ class _TyremanTabState extends State<TyremanTab>
                 });
 
                 return GridView.builder(
-                  padding: const EdgeInsets.all(4), // Spacing pinggir kecilin
+                  padding: const EdgeInsets.all(6),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    // 🔥 FIX: Kolom jadi 6 biar kecil & rapi
                     crossAxisCount: 4,
-                    // 🔥 FIX: Jarak antar kotak jadi 2
-                    mainAxisSpacing: 2,
-                    crossAxisSpacing: 2,
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
                   ),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     var item = docs[index];
+                    var dataUnit = item['data'] as Map<String, dynamic>;
                     String status = item['status'] as String;
                     String id = item['id'] as String;
+                    String vDesc = dataUnit['vehicle_desc'] ?? "-";
 
                     return AnimatedBuilder(
                       animation: _blinkController,
                       builder: (context, child) {
                         Color bgColor = Colors.white;
-                        if (status == 'red') bgColor = Colors.red;
-                        if (status == 'green') {
-                          bgColor = const Color.fromARGB(255, 28, 34, 28);
-                        }
-                        if (status == 'yellow_blink') {
-                          bgColor = Color.lerp(
-                            Colors.yellow.shade700,
-                            Colors.orange.shade900,
-                            _blinkController.value,
-                          )!;
+                        Color txtColor = Colors.black;
+
+                        if (status == 'red') {
+                          bgColor = Colors.red.shade700;
+                          txtColor = Colors.white;
+                        } else if (status == 'green') {
+                          bgColor = Colors.green.shade600;
+                          txtColor = Colors.white;
+                        } else if (status == 'yellow_blink') {
+                          bgColor = Color.lerp(Colors.yellow.shade700, 
+                              Colors.orange.shade900, _blinkController.value)!;
+                          txtColor = Colors.white;
                         }
 
                         return InkWell(
@@ -255,46 +242,63 @@ class _TyremanTabState extends State<TyremanTab>
                             if (status == 'yellow_blink') {
                               _showCloseFindingDialog(id);
                             } else {
-                              var data = item['data'] as Map<String, dynamic>;
-                              int target = data['kpi_target'] ?? 10;
-                              int group = data['plan_group'] ?? 1;
-
-                              bool isJadwal = (target == 10)
-                                  ? (group == groupProdHariIni)
-                                  : (group == hariIni);
-
+                              int target = dataUnit['kpi_target'] ?? 10;
+                              int group = dataUnit['plan_group'] ?? 1;
+                              bool isJadwal = (target == 10) 
+                                  ? (group == groupProdHariIni) : (group == hariIni);
                               bool isAccurate = (isJadwal && status == 'red');
 
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (c) => FormInspectionScreen(
-                                            unitId: id,
-                                            unitCode: id,
-                                            isAccurate: isAccurate,
-                                          )));
+                              Navigator.push(context, MaterialPageRoute(
+                                builder: (c) => FormInspectionScreen(
+                                  unitId: id, unitCode: id, isAccurate: isAccurate,
+                                )));
                             }
                           },
-                          borderRadius: BorderRadius.circular(4),
                           child: Container(
                             decoration: BoxDecoration(
                               color: bgColor,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.black12),
+                              boxShadow: [
+                                BoxShadow(
+                                  // 🔥 FIX: withOpacity ganti ke withValues
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 2,
+                                  offset: const Offset(0, 1),
+                                )
+                              ],
                             ),
-                            child: Center(
-                              child: Text(
-                                id.toUpperCase(),
-                                style: TextStyle(
-                                  color: (status == 'red' || status == 'green')
-                                      ? Colors.white
-                                      : Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                  // 🔥 FIX: Font size jadi 8 buat kotak kecil
-                                  fontSize: 14,
+                            child: Stack(
+                              children: [
+                                Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(id.toUpperCase(),
+                                          style: TextStyle(
+                                              color: txtColor,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11)),
+                                      const SizedBox(height: 2),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                                        child: Text(vDesc.toUpperCase(),
+                                            style: TextStyle(
+                                                // 🔥 FIX: withOpacity ganti ke withValues
+                                                color: txtColor.withValues(alpha: 0.8),
+                                                fontSize: 7,
+                                                fontWeight: FontWeight.w500),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                textAlign: TextAlign.center,
-                              ),
+                                if (status == 'green')
+                                  const Positioned(top: 3, right: 3, 
+                                      child: Icon(Icons.check_circle, size: 10, color: Colors.white)),
+                              ],
                             ),
                           ),
                         );

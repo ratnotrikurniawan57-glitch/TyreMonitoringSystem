@@ -13,67 +13,65 @@ class PerformanceTab extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // 🔥 APPBAR SUDAH DIHAPUS TOTAL DI SINI
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- BAGIAN 1: RINGKASAN STATUS ---
-            // 🔥 TAMBAHKAN SPACER BIAR GAK KETUTUP STATUS BAR HP
-            const SizedBox(height: 5),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Text("MONITORING KONDISI UNIT",
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2)),
-            ),
-            _buildOverallStatus(),
-
-            // --- BAGIAN 2: PERFORMA PER KELAS ---
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 25, 16, 10),
-              child: Text("PERFORMA KELAS UNIT",
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2)),
-            ),
-            _buildUnitStatsGrid(currentMonthYear),
-
-            const Divider(thickness: 1, height: 40),
-
-            // --- BAGIAN 3: LEADERBOARD ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("-Tyreman Activity-",
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                  Text(DateFormat('MMMM yyyy').format(now).toUpperCase(),
-                      style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                ],
+      body: SafeArea( 
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- BAGIAN 1: RINGKASAN STATUS ---
+              const SizedBox(height: 5),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Text("MONITORING KONDISI UNIT",
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2)),
               ),
-            ),
-            const SizedBox(height: 10),
-            _buildTyremanLeaderboard(currentMonthYear),
-            const SizedBox(height: 30),
-          ],
+              _buildOverallStatus(),
+
+              // --- BAGIAN 2: PERFORMA PER KELAS ---
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 25, 16, 10),
+                child: Text("PERFORMA KELAS UNIT",
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2)),
+              ),
+              _buildUnitStatsGrid(currentMonthYear),
+
+              const Divider(thickness: 1, height: 40),
+
+              // --- BAGIAN 3: LEADERBOARD ---
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("-Tyreman Activity-",
+                        style:
+                            TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    Text(DateFormat('MMMM yyyy').format(now).toUpperCase(),
+                        style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              _buildTyremanLeaderboard(currentMonthYear),
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
-    ); // 🔥 KURUNG TUTUP SCAFFOLD DI SINI (DULU ERROR DI SINI)
+    );
   }
-
-  // ... (Fungsi _buildOverallStatus, _statusMiniBox, _buildUnitStatsGrid, _buildSmallProgress, _buildTyremanLeaderboard tetap sama)
 
   Widget _buildOverallStatus() {
     String tglIni = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    int weekdayIni = DateTime.now().weekday;
     int dayOfMonth = DateTime.now().day;
     int grupAktif = (dayOfMonth % 3 == 0) ? 3 : (dayOfMonth % 3);
+    int weekdayIni = DateTime.now().weekday;
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('units').snapshots(),
@@ -129,9 +127,9 @@ class PerformanceTab extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 15),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.05),
+          color: color.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [
@@ -139,7 +137,6 @@ class PerformanceTab extends StatelessWidget {
             const SizedBox(height: 5),
             Text("$count",
                 style: TextStyle(
-                    // 🔥 ANGKA STATUS GEDEIN
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: color)),
@@ -191,7 +188,7 @@ class PerformanceTab extends StatelessWidget {
                     crossAxisCount: 4,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
-                    childAspectRatio: 0.6, // Disesuaikan biar konten muat
+                    childAspectRatio: 0.6,
                   ),
                   itemCount: unitGroups.keys.length,
                   itemBuilder: (context, index) {
@@ -294,7 +291,7 @@ class PerformanceTab extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             SizedBox(
-              height: 35, // 🔥 Gedein Lingkaran
+              height: 35,
               width: 35,
               child: CircularProgressIndicator(
                 value: value / 100,
@@ -305,7 +302,6 @@ class PerformanceTab extends StatelessWidget {
             ),
             Text("${value.toStringAsFixed(0)}%",
                 style: const TextStyle(
-                    // 🔥 Gedein Tulisan %
                     fontSize: 8,
                     fontWeight: FontWeight.bold)),
           ],
@@ -313,7 +309,6 @@ class PerformanceTab extends StatelessWidget {
         const SizedBox(height: 2),
         Text(label,
             style: TextStyle(
-                // 🔥 Gedein Tulisan QTY/ACC
                 fontSize: 8,
                 fontWeight: FontWeight.bold,
                 color: color)),
@@ -327,6 +322,7 @@ class PerformanceTab extends StatelessWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox();
         Map<String, int> points = {};
+        
         var filtered = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           if (data['timestamp'] == null) return false;
@@ -341,13 +337,15 @@ class PerformanceTab extends StatelessWidget {
             points[n] = (points[n] ?? 0) + 1;
           }
         }
+
         var sorted = points.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
 
-        var top5 = sorted.take(5).toList();
+        // 🔥 UPDATE: Diganti jadi 100 supaya semua tim Bapak muncul
+        var allTyreman = sorted.take(100).toList(); 
 
         return Column(
-          children: top5.map((e) {
+          children: allTyreman.map((e) {
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
                   .collection('users')
@@ -356,13 +354,11 @@ class PerformanceTab extends StatelessWidget {
               builder: (context, userSnap) {
                 String name = e.key.toUpperCase();
                 if (userSnap.hasData && userSnap.data!.exists) {
-                  name =
-                      (userSnap.data!.data() as Map<String, dynamic>)['nama'] ??
+                  name = (userSnap.data!.data() as Map<String, dynamic>)['nama'] ??
                           e.key.toUpperCase();
                 }
                 return Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -370,19 +366,17 @@ class PerformanceTab extends StatelessWidget {
                   child: ListTile(
                     dense: true,
                     leading: CircleAvatar(
-                        radius: 14, // 🔥 Gedein Avatar
+                        radius: 14,
                         backgroundColor: Colors.orange.shade50,
-                        child: Text(name[0],
+                        child: Text(name.isNotEmpty ? name[0] : "?",
                             style: const TextStyle(
                                 fontSize: 12, color: Colors.orange))),
                     title: Text(name,
                         style: const TextStyle(
-                            // 🔥 Gedein Nama
                             fontSize: 13,
                             fontWeight: FontWeight.bold)),
                     trailing: Text("${e.value} Unit",
                         style: const TextStyle(
-                            // 🔥 Gedein Jumlah Unit
                             fontSize: 12,
                             color: Colors.orange,
                             fontWeight: FontWeight.bold)),

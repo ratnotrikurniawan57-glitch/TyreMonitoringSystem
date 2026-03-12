@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // <--- IMPORT BARU
 import 'firebase_options.dart';
 import 'auth/login_screen.dart';
 import 'core/theme/app_theme.dart';
+import 'features/dashboard_screen.dart'; // <--- IMPORT DASHBOARD LO
 
 // --- 1. HANDLER NOTIF SAAT APLIKASI MATI ---
 @pragma('vm:entry-point')
@@ -29,8 +31,6 @@ void main() async {
 
   // 4. SETUP NOTIFIKASI
   FirebaseMessaging messaging = FirebaseMessaging.instance;
-
-  // Minta izin ke HP
   await messaging.requestPermission(
     alert: true,
     badge: true,
@@ -38,24 +38,36 @@ void main() async {
   );
 
   // --- 5. OTOMATIS MASUK GRUP NOTIF TEMUAN ---
-  // Semua HP yang instal ini otomatis "Join" grup temuan_unit
   await messaging.subscribeToTopic('temuan_unit');
-  debugPrint("Selesai: HP sudah join ke grup temuan_unit");
-
-  // --- AMBIL TOKEN (Opsional buat debugging) ---
-  String? token = await messaging.getToken();
-  debugPrint("================================================");
-  debugPrint("KODE ALAMAT HP LO (TOKEN): $token");
-  debugPrint("================================================");
+  
+  // --- 6. LOGIKA AUTO-LOGIN (DITAMBAHKAN) ---
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+  String? nrp = prefs.getString('userNrp');
+  String? role = prefs.getString('userRole');
 
   // Set handler buat background
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  runApp(const MyApp());
+  // Kirim data login ke MyApp
+  runApp(MyApp(
+    isLoggedIn: isLoggedIn,
+    nrp: nrp,
+    role: role,
+  ));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool isLoggedIn;
+  final String? nrp;
+  final String? role;
+
+  const MyApp({
+    super.key, 
+    required this.isLoggedIn, 
+    this.nrp, 
+    this.role
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +75,10 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'TMS Mobile',
       theme: AppTheme.lightTheme,
-      home: const LoginScreen(),
+      // LOGIKA GERBANG: Cek apakah sudah login & data lengkap
+      home: (isLoggedIn && nrp != null && role != null)
+          ? DashboardScreen(nrpAktif: nrp!, role: role!)
+          : const LoginScreen(),
     );
   }
 }

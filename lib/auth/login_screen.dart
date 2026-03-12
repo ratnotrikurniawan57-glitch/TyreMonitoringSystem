@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Tambahan untuk Opsi A
 import '../features/dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,6 +16,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _isObscure = true;
+
+  // --- LOGIC OPSI A: AMBIL NRP SAAT APP DIBUKA ---
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedNRP();
+  }
+
+  void _loadSavedNRP() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      // Ambil NRP yang tersimpan, kalau ada langsung pasang di kotak input
+      nrpController.text = prefs.getString('saved_nrp') ?? '';
+    });
+  }
+  // ----------------------------------------------
 
   void prosesLogin() async {
     String nrp = nrpController.text.trim().toLowerCase();
@@ -38,7 +55,11 @@ class _LoginScreenState extends State<LoginScreen> {
         String userRole = userDoc.data()?['role'] ?? 'tyreman';
 
         if (dbPassword == password) {
-          // GUARD: Cek apakah widget masih nempel di layar sebelum pindah halaman
+          // --- LOGIC OPSI A: SIMPAN NRP SAAT LOGIN BERHASIL ---
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setString('saved_nrp', nrp);
+          // ----------------------------------------------------
+
           if (!mounted) return;
 
           Navigator.pushReplacement(
@@ -57,7 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
         throw "NRP $nrp tidak terdaftar!";
       }
     } catch (e) {
-      // GUARD: Cek apakah widget masih nempel sebelum munculin snackbar
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -162,14 +182,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: 40), // Jarak ke footer identitas
+              const SizedBox(height: 40),
 
-              // --- IDENTITAS APLIKASI (TMS) ---
               const Text(
                 "TMS",
                 style: TextStyle(
                     fontSize: 24,
-                    // FontWeight.black DIGANTI JADI FontWeight.w900
                     fontWeight: FontWeight.w900,
                     color: Color(0xFFFF8C00),
                     letterSpacing: 3),
@@ -185,7 +203,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 8),
 
-              // --- VERSI TETAP ADA ---
               const Text(
                 "Version 1.0.0",
                 style: TextStyle(
